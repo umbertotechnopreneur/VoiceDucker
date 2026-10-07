@@ -23,9 +23,14 @@ VBWR E -->
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel x:Name="RootPanel" Padding="22" Spacing="16">
             <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                <Image Source="Assets/about-banner.png" Width="58" Height="58" Stretch="UniformToFill" />
+                <Border Width="42" Height="42" Background="#263B50"
+                        BorderBrush="#F6A24C" BorderThickness="1" CornerRadius="2">
+                    <FontIcon Glyph="&#xE720;" FontFamily="Segoe Fluent Icons"
+                              FontSize="22" Foreground="#F6A24C" />
+                </Border>
                 <StackPanel VerticalAlignment="Center" Spacing="2">
-                    <TextBlock Text="VOICEDUCKER" FontFamily="Consolas" FontSize="20" FontWeight="Bold" />
+                    <TextBlock Text="VoiceDucker" FontFamily="Consolas" FontSize="23"
+                               FontWeight="Bold" CharacterSpacing="70" />
                     <TextBlock Text="Your audio, quieter when you speak" FontSize="13" Opacity="0.72" />
                 </StackPanel>
             </StackPanel>
