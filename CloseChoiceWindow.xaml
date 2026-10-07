@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="VoiceDucker.CloseChoiceWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Close VoiceDucker?">
+    <Window.SystemBackdrop>
+        <DesktopAcrylicBackdrop />
+    </Window.SystemBackdrop>
+    <StackPanel Padding="24" Spacing="18">
+        <StackPanel Orientation="Horizontal" Spacing="12">
+            <Image Source="Assets/about-banner.png" Width="52" Height="52" />
+            <StackPanel VerticalAlignment="Center" Spacing="3">
+                <TextBlock Text="Keep listening?" FontSize="21" FontWeight="SemiBold" />
+                <TextBlock Text="VoiceDucker can continue from the system tray."
+                           TextWrapping="Wrap" Opacity="0.72" />
+            </StackPanel>
+        </StackPanel>
+        <TextBlock Text="Minimize to tray keeps the current audio setting and microphone state. Closing stops the microphone and restores audio levels it still controls."
+                   TextWrapping="Wrap" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Content="Cancel" Click="Cancel_Click" />
+            <Button Content="Close app" Click="CloseApp_Click" />
+            <Button Content="Minimize to tray" Click="Minimize_Click"
+                    Background="#346A9C" Foreground="#FFF4DC" />
+        </StackPanel>
+    </StackPanel>
+</Window>

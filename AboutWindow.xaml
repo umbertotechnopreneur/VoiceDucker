@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="VoiceDucker.AboutWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="About VoiceDucker">
+    <Window.SystemBackdrop>
+        <DesktopAcrylicBackdrop />
+    </Window.SystemBackdrop>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Padding="22" Spacing="14">
+            <Grid Height="200" HorizontalAlignment="Center" Width="200">
+                <Image Source="Assets/about-banner.png" Stretch="UniformToFill" />
+            </Grid>
+            <StackPanel HorizontalAlignment="Center" Spacing="3">
+                <TextBlock Text="VOICEDUCKER" FontFamily="Consolas" FontSize="22"
+                           FontWeight="Bold" HorizontalAlignment="Center" />
+                <TextBlock x:Name="VersionText" Text="Version" Opacity="0.65"
+                           HorizontalAlignment="Center" />
+            </StackPanel>
+            <TextBlock Text="Music steps back while you speak, then smoothly returns."
+                       TextWrapping="Wrap" TextAlignment="Center" />
+            <Border Background="#263B50" CornerRadius="10" Padding="14">
+                <StackPanel Spacing="5">
+                    <TextBlock Text="Part of VibeWare" FontWeight="SemiBold" />
+                    <TextBlock Text="Created by Umberto Giacobbi. Built with AI assistance and accountable human review."
+                               TextWrapping="Wrap" FontSize="12" />
+                </StackPanel>
+            </Border>
+            <StackPanel Spacing="4">
+                <HyperlinkButton Content="VoiceDucker on GitHub ↗"
+                                 NavigateUri="https://github.com/umbertotechnopreneur/VoiceDucker" />
+                <HyperlinkButton Content="VibeWare on GitHub ↗"
+                                 NavigateUri="https://github.com/umbertotechnopreneur/VibeWare" />
+            </StackPanel>
+            <Button Content="Close" HorizontalAlignment="Right" Click="Close_Click" />
+        </StackPanel>
+    </ScrollViewer>
+</Window>

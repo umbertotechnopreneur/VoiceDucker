@@ -13,4 +13,9 @@
 
 namespace VoiceDucker.Audio;
 
-public sealed record EngineStatus(bool Running, string Message);
+public sealed record EngineStatus(
+    bool Running,
+    bool Speaking,
+    int AffectedSessions,
+    double MicrophoneLevel,
+    string Message);

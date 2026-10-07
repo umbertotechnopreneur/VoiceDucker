@@ -20,19 +20,21 @@ namespace VoiceDucker.Audio;
 // Tracks only session levels changed by VoiceDucker, across active playback devices.
 internal sealed class PlaybackSessions : IDisposable
 {
-    private const float DuckFactor = 0.5f;
     private const float AudiblePeak = 0.001f;
     private const float VolumeTolerance = 0.005f;
     private readonly MMDeviceEnumerator _devices = new();
     private readonly Dictionary<string, SavedVolume> _saved = new(StringComparer.Ordinal);
     private readonly HashSet<string> _manualOverrides = new(StringComparer.Ordinal);
 
+    public bool HasOwnedSessions => _saved.Count > 0;
+
     // shouldDuck: whether microphone input currently exceeds the voice gate.
     // Returns the number of audio sessions whose lowered level is still owned.
-    public int Update(bool shouldDuck)
+    public int Update(bool shouldDuck, DuckingSettings settings, bool restoreImmediately = false)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var owned = 0;
+        var now = Environment.TickCount64;
 
         foreach (var endpoint in _devices.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
         {
@@ -48,7 +50,7 @@ internal sealed class PlaybackSessions : IDisposable
 
                     if (_saved.TryGetValue(key, out var saved))
                     {
-                        if (!IsAt(volume.Volume, saved.Lowered))
+                        if (!IsAt(volume.Volume, saved.Expected))
                         {
                             // A mixer change by the user ends our claim on this session.
                             _saved.Remove(key);
@@ -57,19 +59,55 @@ internal sealed class PlaybackSessions : IDisposable
                                 _manualOverrides.Add(key);
                             }
                         }
-                        else if (shouldDuck)
-                        {
-                            owned++;
-                        }
-                        else
+                        else if (restoreImmediately)
                         {
                             volume.Volume = saved.Original;
                             _saved.Remove(key);
+                        }
+                        else
+                        {
+                            var target = shouldDuck
+                                ? saved.Original * (1f - settings.ReductionPercent / 100f)
+                                : saved.Original;
+                            var movingDown = IsAt(target, saved.Target)
+                                ? saved.Target < saved.StartVolume
+                                : target < saved.Expected;
+                            var duration = movingDown
+                                ? settings.FadeDownMilliseconds
+                                : settings.FadeUpMilliseconds;
+
+                            if (!IsAt(target, saved.Target) || duration != saved.Duration)
+                            {
+                                saved.StartVolume = volume.Volume;
+                                saved.Target = target;
+                                saved.StartTick = now;
+                                saved.Duration = duration;
+                            }
+
+                            var fraction = duration == 0
+                                ? 1f
+                                : Math.Clamp((float)(now - saved.StartTick) / duration, 0f, 1f);
+                            var next = saved.StartVolume + (saved.Target - saved.StartVolume) * fraction;
+                            if (!IsAt(volume.Volume, next))
+                            {
+                                volume.Volume = next;
+                            }
+                            saved.Expected = next;
+
+                            if (!shouldDuck && fraction >= 1f)
+                            {
+                                _saved.Remove(key);
+                            }
+                            else
+                            {
+                                owned++;
+                            }
                         }
                         continue;
                     }
 
                     if (!shouldDuck || _manualOverrides.Contains(key) || volume.Mute ||
+                        settings.ReductionPercent == 0 ||
                         session.State != AudioSessionState.AudioSessionStateActive ||
                         session.AudioMeterInformation.MasterPeakValue <= AudiblePeak)
                     {
@@ -82,9 +120,9 @@ internal sealed class PlaybackSessions : IDisposable
                         continue;
                     }
 
-                    var lowered = original * DuckFactor;
-                    volume.Volume = lowered;
-                    _saved.Add(key, new SavedVolume(original, lowered));
+                    var duckTarget = original * (1f - settings.ReductionPercent / 100f);
+                    _saved.Add(key, new SavedVolume(original, duckTarget, now,
+                        settings.FadeDownMilliseconds));
                     owned++;
                 }
             }
@@ -104,12 +142,20 @@ internal sealed class PlaybackSessions : IDisposable
         return owned;
     }
 
-    public void RestoreAll() => Update(false);
+    public void RestoreAll() => Update(false, new DuckingSettings(), true);
 
     public void Dispose() => _devices.Dispose();
 
     private static bool IsAt(float actual, float expected) =>
         Math.Abs(actual - expected) < VolumeTolerance;
 
-    private sealed record SavedVolume(float Original, float Lowered);
+    private sealed class SavedVolume(float original, float target, long startTick, int duration)
+    {
+        public float Original { get; } = original;
+        public float Expected { get; set; } = original;
+        public float StartVolume { get; set; } = original;
+        public float Target { get; set; } = target;
+        public long StartTick { get; set; } = startTick;
+        public int Duration { get; set; } = duration;
+    }
 }
