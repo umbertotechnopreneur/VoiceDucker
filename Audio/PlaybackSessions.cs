@@ -121,8 +121,14 @@ internal sealed class PlaybackSessions : IDisposable
                     }
 
                     var duckTarget = original * (1f - settings.ReductionPercent / 100f);
-                    _saved.Add(key, new SavedVolume(original, duckTarget, now,
-                        settings.FadeDownMilliseconds));
+                    var newVolume = new SavedVolume(original, duckTarget, now,
+                        settings.FadeDownMilliseconds);
+                    if (settings.FadeDownMilliseconds == 0)
+                    {
+                        volume.Volume = duckTarget;
+                        newVolume.Expected = duckTarget;
+                    }
+                    _saved.Add(key, newVolume);
                     owned++;
                 }
             }
