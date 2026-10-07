@@ -25,14 +25,13 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
-      - name: Restore locked packages
-        run: dotnet restore VoiceDucker.csproj --locked-mode -p:Platform=${{ matrix.architecture }} -p:SelfContained=true
-      - name: Publish unpackaged self-contained app
-        run: dotnet publish VoiceDucker.csproj -c Release -p:Platform=${{ matrix.architecture }} -p:SelfContained=true -p:PublishReadyToRun=false -p:PublishSingleFile=false -r ${{ matrix.runtime }} --no-restore -o artifacts/publish/${{ matrix.runtime }}
+      - name: Clean and build portable app
+        shell: pwsh
+        run: ./scripts/build.ps1 -Architecture '${{ matrix.architecture }}' -Configuration Release
       - name: Create portable ZIP
         shell: pwsh
         run: |
-          $folder = 'artifacts/publish/${{ matrix.runtime }}'
+          $folder = 'artifacts/app/${{ matrix.runtime }}'
           if (-not (Test-Path (Join-Path $folder 'VoiceDucker.exe'))) {
             throw 'The published executable is missing.'
           }

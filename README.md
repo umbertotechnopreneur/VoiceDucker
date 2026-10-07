@@ -43,10 +43,15 @@ in the Windows volume mixer.
 On Windows 11, with the .NET 10 SDK and Windows App SDK build tools:
 
 ```powershell
-dotnet restore VoiceDucker.csproj --locked-mode -p:Platform=x64 -p:SelfContained=true
-dotnet build VoiceDucker.csproj -c Debug -p:Platform=x64 -p:SelfContained=true -r win-x64 --no-restore
-dotnet run --project VoiceDucker.csproj -c Debug -p:Platform=x64 -p:SelfContained=true -r win-x64 --no-restore
+.\scripts\build.ps1 -Architecture x64 -Configuration Debug -Run
 ```
+
+Each build clears the selected app output and intermediate build directories,
+then restores locked packages and publishes a complete portable folder. The
+stable executable paths are `artifacts/app/win-x64/VoiceDucker.exe` and
+`artifacts/app/win-arm64/VoiceDucker.exe`. All build and generated files are
+under `artifacts/`. To build without launching, omit `-Run`. The script refuses
+to replace the files of a running portable instance.
 
 Allow desktop app microphone access in Windows if needed. Start some audio,
 press **Enable**, speak, then press **Disable** to stop. The signal threshold is
