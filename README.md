@@ -1,62 +1,58 @@
 # VoiceDucker
 
-VoiceDucker is a small Windows 11 app by **VibeWare**. It listens to the default
-Windows communications microphone while enabled and halves the volume of active
-**Spotify desktop** audio sessions when microphone level crosses a fixed gate.
-After a short pause, it restores each session's earlier volume. It never changes
-the system master volume, Spotify's own settings, or other applications.
+I use AI voice chats a lot, and I got tired of turning down music and other
+audio every time I spoke. I wanted one tiny switch: while my microphone picks
+up my voice, lower whatever is playing; when I stop, bring it back. I put the
+first version together in about fifteen minutes. It is a small personal tool,
+and I offer it as is, without guarantees.
 
-The app uses WinUI 3 and a desktop Acrylic backdrop. Its only main control is
-**Enable / Disable**. It starts disabled and stops listening when closed.
+I am **Umberto Giacobbi**, the creator of VoiceDucker. This is my MIT-licensed
+repository and part of the [VibeWare initiative](https://umbertogiacobbi.biz/vibeware/manifesto).
 
-## What it does and does not detect
+VoiceDucker watches the default Windows communications microphone **only after
+I press Enable**. When its signal crosses a threshold, the app halves the
+volume of audio sessions currently playing on active output devices. It
+restores levels it still owns after a short quiet period. It does not change
+the system master volume. If I move an app's slider in the Windows volume
+mixer, VoiceDucker leaves my new level alone.
 
-VoiceDucker uses microphone signal level, not speech recognition. Loud background
-sound can trigger it, especially if speakers feed back into the microphone.
-Headphones make the intended behavior more reliable. The fixed threshold is an
-initial value, not a calibrated voice activity detector. Captured microphone
-buffers are processed in memory and are not retained, sent over a network, or
-written to disk.
+This is a signal-level gate, not speech recognition: a loud room or speakers
+feeding into the microphone can trigger it. Headphones help. Microphone data
+stays in memory; the app does not record, transmit, or save it. Closing the
+window stops capture and attempts to restore changed sessions. If the process
+is killed or an audio device disappears, I may need to reset a level manually
+in the Windows volume mixer.
 
-Spotify must be running as the Windows desktop application; a Spotify browser tab
-is outside this first version. The app discovers active playback sessions, so
-Spotify may need to begin playback before the status changes from “not found.”
-If you change Spotify's mixer level while it is lowered, VoiceDucker leaves your
-new level alone instead of overwriting it during restoration.
+## Build and try it
 
-## Build and run
-
-Requirements: Windows 11, .NET 10 SDK, Windows App SDK build tools, and an active
-microphone. The app is a packaged WinUI 3 project created from Microsoft's
-template. Package signing and installation are not part of this source release.
+On Windows 11, with the .NET 10 SDK and Windows App SDK build tools:
 
 ```powershell
 dotnet restore VoiceDucker.csproj --locked-mode -p:Platform=x64 -r win-x64
 dotnet build VoiceDucker.csproj -c Debug -p:Platform=x64 -r win-x64 --no-restore
-dotnet run --project VoiceDucker.csproj -c Debug -p:Platform=x64 -r win-x64
+dotnet run --project VoiceDucker.csproj -c Debug -p:Platform=x64 -r win-x64 --no-restore
 ```
 
-Windows must allow microphone access for VoiceDucker. Disable it before
-changing audio devices. Closing the window also attempts to restore Spotify's
-earlier mixer level; an abrupt process termination or device failure can prevent
-that restoration, in which case use the Windows volume mixer.
+Allow microphone access if Windows asks. Start some audio, press **Enable**,
+speak, then press **Disable** to stop. The threshold is fixed for now, so I do
+not promise it will suit every microphone or room. There is no account,
+telemetry, network service, startup task, or audio recording.
 
-## Development and evidence
+The code uses WinUI 3 and NAudio's Windows Core Audio sessions. I directed the
+implementation with OpenAI Codex; the source headers and Git history record
+that provenance. The logo in `Assets/vibeware-logo.png` is from the VibeWare
+brand repository. VoiceDucker is under the [MIT license](LICENSE).
 
-The app is intentionally limited to one window, one microphone capture stream,
-and Spotify's own Core Audio sessions. There is no tray service, startup task,
-account, analytics, network API, or automatic update mechanism.
+---
 
-Local verification: x64 Debug compiled with no warnings, and Release generated
-an unsigned MSIX. The Release packaging tool warned that the optional symbol
-packaging executable was unavailable; the MSIX build itself succeeded. No app
-installation or interactive microphone/Spotify test has been performed.
-Microphone permissions, Spotify session discovery, perceived ducking, audio
-device changes, and actual memory use remain unverified.
+<a href="https://umbertogiacobbi.biz/vibeware/manifesto">
+  <img align="right" src="https://raw.githubusercontent.com/umbertotechnopreneur/VibeWare/main/Branding/vibeware-logo.png" alt="VibeWare floppy logo" width="180">
+</a>
 
-The initial implementation was prepared with Codex under Umberto Giacobbi's
-direction. Its local build is reported separately from interactive audio checks.
+### This is VibeWare
 
-The unmodified VibeWare logo in `Assets/vibeware-logo.png` comes from the VibeWare
-brand repository. VibeWare was created by [Umberto Giacobbi](https://umbertogiacobbi.biz).
-The project's MIT license is in [LICENSE](LICENSE).
+VibeWare is a term coined by [Umberto Giacobbi](https://umbertogiacobbi.biz) and an open initiative for developers who build with AI and care about the craft. It challenges the assumption that vibe coding is synonymous with low-quality code. It openly acknowledges the weaknesses and risks of AI-generated software: experienced developers must guide the process, test carefully, check security and take responsibility for the result. A VibeWare footer simply says: this software was developed with AI, and it deserves to be judged by the quality of the work.
+
+[Read the VibeWare manifesto](https://umbertogiacobbi.biz/vibeware/manifesto)
+
+*You are welcome to explore, adapt and reuse the open-source VibeWare materials under the project license — my contribution to the developer community.*

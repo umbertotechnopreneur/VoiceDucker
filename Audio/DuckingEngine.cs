@@ -1,3 +1,17 @@
+/* VBWR B
+ * Project: VoiceDucker
+ * Repository: https://github.com/umbertotechnopreneur/VoiceDucker
+ * Creator: Umberto Giacobbi | https://umbertogiacobbi.biz
+ * VibeWare initiative: Human intent. AI implementation. Accountable human review.
+ * Manifesto: https://umbertogiacobbi.biz/vibeware/manifesto
+ * Created with AI: OpenAI Codex assisted the initial implementation; Git history
+ * Modified with AI: OpenAI Codex; all audible playback sessions, 2026-10-08
+ * Human guidance: Umberto Giacobbi defined the purpose and audio behavior
+ * Evidence: Git history
+ * Copyright (c) 2026 Umberto Giacobbi
+ * License: MIT
+ * VBWR E */
+
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 
@@ -60,7 +74,7 @@ public sealed class DuckingEngine : IDisposable
 
         if (worker is not null && worker.IsAlive && !worker.Join(TimeSpan.FromSeconds(5)))
         {
-            Publish(true, "Stopping is taking longer than expected. Spotify restoration is not confirmed.");
+            Publish(true, "Stopping is taking longer than expected. Audio restoration is not confirmed.");
         }
     }
 
@@ -71,7 +85,7 @@ public sealed class DuckingEngine : IDisposable
 
     private void Run(ManualResetEventSlim stop)
     {
-        SpotifySessions? spotify = null;
+        PlaybackSessions? playback = null;
         string? error = null;
         try
         {
@@ -89,18 +103,18 @@ public sealed class DuckingEngine : IDisposable
                 var audio = args.Buffer.AsSpan(0, args.BytesRecorded);
                 gate.Observe(MicrophoneLevel.Rms(audio, capture.WaveFormat));
             };
-            spotify = new SpotifySessions();
+            playback = new PlaybackSessions();
             capture.StartRecording();
 
             while (!stop.Wait(150))
             {
                 var speaking = gate.IsSpeaking;
-                var found = spotify.Update(speaking);
-                var message = !found
-                    ? "Listening. Start playback in the Spotify desktop app."
+                var lowered = playback.Update(speaking);
+                var message = speaking && lowered > 0
+                    ? $"Microphone sound detected. {lowered} playing audio session(s) are 50% quieter."
                     : speaking
-                        ? "Microphone sound detected. Spotify is 50% quieter."
-                        : "Listening. Spotify is at its previous level.";
+                        ? "Microphone sound detected. No playing audio to lower."
+                        : "Listening. Playback is at its previous level.";
                 Publish(true, message);
             }
 
@@ -112,17 +126,17 @@ public sealed class DuckingEngine : IDisposable
         }
         finally
         {
-            if (spotify is not null)
+            if (playback is not null)
             {
                 try
                 {
-                    spotify.RestoreAll();
+                    playback.RestoreAll();
                 }
                 catch (Exception exception)
                 {
-                    error = $"Spotify volume could not be restored: {exception.Message}";
+                    error = $"Audio volume could not be restored: {exception.Message}";
                 }
-                spotify.Dispose();
+                playback.Dispose();
             }
 
             Publish(false, error ?? "Off. Your microphone is not in use.");

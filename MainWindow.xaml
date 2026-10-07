@@ -1,9 +1,22 @@
 <?xml version="1.0" encoding="utf-8" ?>
+<!-- VBWR B
+  Project: VoiceDucker
+  Repository: https://github.com/umbertotechnopreneur/VoiceDucker
+  Creator: Umberto Giacobbi | https://umbertogiacobbi.biz
+  VibeWare initiative: Human intent. AI implementation. Accountable human review.
+  Manifesto: https://umbertogiacobbi.biz/vibeware/manifesto
+  Created with AI: OpenAI Codex assisted the initial implementation; Git history
+  Modified with AI: OpenAI Codex; playback wording, 2026-10-08
+  Human guidance: Umberto Giacobbi defined the purpose and audio behavior
+  Evidence: Git history
+  Copyright (c) 2026 Umberto Giacobbi
+  License: MIT
+VBWR E -->
 <Window
     x:Class="VoiceDucker.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="VoiceDucker by VibeWare">
+    Title="VoiceDucker">
     <Window.SystemBackdrop>
         <DesktopAcrylicBackdrop />
     </Window.SystemBackdrop>
@@ -20,8 +33,8 @@
             <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <Image Source="Assets/vibeware-logo.png" Width="68" Height="68" Stretch="Uniform" />
                 <StackPanel VerticalAlignment="Center" Spacing="3">
-                    <TextBlock Text="Spotify, quieter when you speak" FontSize="15" FontWeight="SemiBold" />
-                    <TextBlock Text="by VibeWare" Opacity="0.7" />
+                    <TextBlock Text="Your audio, quieter when you speak" FontSize="15" FontWeight="SemiBold" />
+                    <TextBlock Text="by Umberto Giacobbi · part of VibeWare" Opacity="0.7" />
                 </StackPanel>
             </StackPanel>
 
@@ -29,7 +42,7 @@
             <Button x:Name="ToggleButton" Content="Enable" Click="ToggleButton_Click"
                     HorizontalAlignment="Stretch" MinHeight="42"
                     Background="#346A9C" Foreground="#FFF4DC" />
-            <TextBlock Text="Spotify returns to its previous level when the mic is quiet."
+            <TextBlock Text="Playing audio returns to its previous level when the mic is quiet."
                        FontSize="12" Opacity="0.65" TextWrapping="Wrap" />
         </StackPanel>
     </Grid>

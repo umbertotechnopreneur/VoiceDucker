@@ -1,4 +1,17 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
+<!-- VBWR B
+  Project: VoiceDucker
+  Repository: https://github.com/umbertotechnopreneur/VoiceDucker
+  Creator: Umberto Giacobbi | https://umbertogiacobbi.biz
+  VibeWare initiative: Human intent. AI implementation. Accountable human review.
+  Manifesto: https://umbertogiacobbi.biz/vibeware/manifesto
+  Created with AI: OpenAI Codex assisted the initial implementation; Git history
+  Modified with AI: OpenAI Codex; playback wording, 2026-10-08
+  Human guidance: Umberto Giacobbi defined the purpose and audio behavior
+  Evidence: Git history
+  Copyright (c) 2026 Umberto Giacobbi
+  License: MIT
+VBWR E -->
 
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
@@ -17,7 +30,7 @@
 
   <Properties>
     <DisplayName>VoiceDucker</DisplayName>
-    <PublisherDisplayName>VibeWare</PublisherDisplayName>
+    <PublisherDisplayName>Umberto Giacobbi</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
     <uap10:PackageIntegrity>
       <uap10:Content Enforcement="on"/>
@@ -38,7 +51,7 @@
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
         DisplayName="VoiceDucker"
-        Description="Lower Spotify while speaking, by VibeWare"
+        Description="Lower playing audio while speaking. By Umberto Giacobbi, part of VibeWare."
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
