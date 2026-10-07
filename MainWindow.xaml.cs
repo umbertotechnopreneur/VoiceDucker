@@ -388,13 +388,14 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = HorizontalAlignment.Right
         };
         var title = new Grid();
+        title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
         title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });
-        Grid.SetColumn(percentage, 1);
+        Grid.SetColumn(name, 1);
+        Grid.SetColumn(percentage, 2);
         title.Children.Add(name);
         title.Children.Add(percentage);
-        var icon = new Image { Width = 20, Height = 20, Stretch = Stretch.Uniform };
+        var icon = new Image { Width = 24, Height = 24, Stretch = Stretch.Uniform };
         var iconPlaceholder = new FontIcon
         {
             Glyph = "\uE80A",
@@ -402,10 +403,9 @@ public sealed partial class MainWindow : Window
             FontSize = 16,
             Opacity = 0.55
         };
-        var iconLayer = new Grid { Width = 20, Height = 20, Margin = new Thickness(6, 0, 0, 0) };
+        var iconLayer = new Grid { Width = 24, Height = 24, Margin = new Thickness(0, 0, 8, 0) };
         iconLayer.Children.Add(iconPlaceholder);
         iconLayer.Children.Add(icon);
-        Grid.SetColumn(iconLayer, 2);
         title.Children.Add(iconLayer);
 
         var slider = new Slider

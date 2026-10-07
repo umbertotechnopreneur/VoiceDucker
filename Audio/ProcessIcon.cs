@@ -9,7 +9,6 @@ internal static class ProcessIcon
 {
     private const uint ProcessQueryLimitedInformation = 0x1000;
     private const uint ShellGetIcon = 0x100;
-    private const uint ShellSmallIcon = 0x1;
 
     public static byte[]? ReadPng(int processId)
     {
@@ -21,7 +20,7 @@ internal static class ProcessIcon
 
         var info = new ShellFileInfo();
         if (SHGetFileInfo(path, 0, ref info, (uint)Marshal.SizeOf<ShellFileInfo>(),
-                ShellGetIcon | ShellSmallIcon) == IntPtr.Zero || info.Icon == IntPtr.Zero)
+                ShellGetIcon) == IntPtr.Zero || info.Icon == IntPtr.Zero)
         {
             return null;
         }
