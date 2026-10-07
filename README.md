@@ -31,9 +31,9 @@ microphone. The app is a packaged WinUI 3 project created from Microsoft's
 template. Package signing and installation are not part of this source release.
 
 ```powershell
-dotnet restore --locked-mode
-dotnet build VoiceDucker.csproj -c Debug -p:Platform=x64
-dotnet run --project VoiceDucker.csproj -c Debug -p:Platform=x64
+dotnet restore VoiceDucker.csproj --locked-mode -p:Platform=x64 -r win-x64
+dotnet build VoiceDucker.csproj -c Debug -p:Platform=x64 -r win-x64 --no-restore
+dotnet run --project VoiceDucker.csproj -c Debug -p:Platform=x64 -r win-x64
 ```
 
 Windows must allow microphone access for VoiceDucker. Disable it before
