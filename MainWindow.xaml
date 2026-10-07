@@ -107,10 +107,12 @@ VBWR E -->
                                SmallChange="100" SpinButtonPlacementMode="Compact"
                                ValueChanged="SettingBox_ValueChanged" />
                     <TextBlock Grid.Row="2" Text="Fade back (ms)" VerticalAlignment="Center" />
-                    <NumberBox x:Name="FadeUpBox" Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="5000"
+                    <NumberBox x:Name="FadeUpBox" Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="30000"
                                SmallChange="100" SpinButtonPlacementMode="Compact"
                                ValueChanged="SettingBox_ValueChanged" />
                 </Grid>
+                <TextBlock Text="Fade back is the time to return to the previous volume (for example, 10% to 100%)."
+                           TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
                 <CheckBox x:Name="StartupCheckBox" Content="Start with Windows (opens with mic off)"
                           Click="StartupCheckBox_Click" />
                 <TextBlock x:Name="FeedbackText" TextWrapping="Wrap" FontSize="12" />

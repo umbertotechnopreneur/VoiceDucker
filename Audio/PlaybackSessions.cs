@@ -150,7 +150,24 @@ internal sealed class PlaybackSessions : IDisposable
         return owned;
     }
 
-    public void RestoreAll() => Update(false, new DuckingSettings(), true);
+    public void RestoreAll(int fadeMilliseconds)
+    {
+        if (fadeMilliseconds == 0)
+        {
+            Update(false, new DuckingSettings(), true);
+            return;
+        }
+
+        var settings = new DuckingSettings(FadeUpMilliseconds: fadeMilliseconds);
+        while (HasOwnedSessions)
+        {
+            Update(false, settings);
+            if (HasOwnedSessions)
+            {
+                Thread.Sleep(50);
+            }
+        }
+    }
 
     public void Dispose() => _devices.Dispose();
 

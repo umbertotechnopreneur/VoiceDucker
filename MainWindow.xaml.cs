@@ -122,6 +122,7 @@ public sealed partial class MainWindow : Window
         }
         try
         {
+            await StartupRegistration.InitializeDefaultAsync(SettingsStore.HasSavedSettings);
             StartupCheckBox.IsChecked = await StartupRegistration.IsEnabledAsync();
         }
         catch (Exception exception)
@@ -179,7 +180,7 @@ public sealed partial class MainWindow : Window
             _settings.IncludeOtherSources);
         if (!next.IsValid)
         {
-            FeedbackText.Text = "Reduction must be 0–100%; fade times must be 0–5000 ms.";
+            FeedbackText.Text = "Reduction: 0–100%; fade down: 0–5000 ms; fade back: 0–30000 ms.";
             return;
         }
 
@@ -219,6 +220,7 @@ public sealed partial class MainWindow : Window
         try
         {
             await StartupRegistration.SetEnabledAsync(StartupCheckBox.IsChecked == true);
+            StartupRegistration.SavePreferenceMarker();
             FeedbackText.Text = string.Empty;
         }
         catch (Exception exception)

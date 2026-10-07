@@ -23,6 +23,7 @@ internal sealed class DuckingEngine : IDisposable
     private Thread? _worker;
     private ManualResetEventSlim? _stop;
     private DuckingSettings _settings;
+    private int _restoreMillisecondsOnStop;
     private EngineStatus? _lastStatus;
     private double _microphoneLevel;
 
@@ -65,6 +66,7 @@ internal sealed class DuckingEngine : IDisposable
 
             _stop?.Dispose();
             _stop = new ManualResetEventSlim(false);
+            Volatile.Write(ref _restoreMillisecondsOnStop, 0);
             _lastStatus = null;
             var stop = _stop;
             worker = new Thread(() => Run(stop))
@@ -79,16 +81,23 @@ internal sealed class DuckingEngine : IDisposable
         worker.Start();
     }
 
-    public void Stop()
+    public void Stop() => Stop(0);
+
+    private void Stop(int restoreMilliseconds)
     {
         Thread? worker;
         lock (_stateLock)
         {
             worker = _worker;
+            if (restoreMilliseconds > 0)
+            {
+                // A concurrent Disable must not cancel the exit restoration fade.
+                Volatile.Write(ref _restoreMillisecondsOnStop, restoreMilliseconds);
+            }
             _stop?.Set();
         }
 
-        if (worker is not null && worker.IsAlive && !worker.Join(TimeSpan.FromSeconds(5)))
+        if (worker is not null && worker.IsAlive && !worker.Join(TimeSpan.FromSeconds(10)))
         {
             Publish(true, false, 0, 0,
                 "Stopping is taking longer than expected. Audio restoration is not confirmed.");
@@ -97,7 +106,7 @@ internal sealed class DuckingEngine : IDisposable
 
     public void Dispose()
     {
-        Stop();
+        Stop(2000);
     }
 
     private void Run(ManualResetEventSlim stop)
@@ -156,7 +165,7 @@ internal sealed class DuckingEngine : IDisposable
             {
                 try
                 {
-                    playback.RestoreAll();
+                    playback.RestoreAll(Volatile.Read(ref _restoreMillisecondsOnStop));
                 }
                 catch (Exception exception)
                 {
