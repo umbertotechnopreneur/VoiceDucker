@@ -1,35 +1,87 @@
-# VBWR B
-# Project: VoiceDucker
-# Repository: https://github.com/umbertotechnopreneur/VoiceDucker
-# Creator: Umberto Giacobbi | https://umbertogiacobbi.biz
-# VibeWare initiative: Human intent. AI implementation. Accountable human review.
-# Manifesto: https://umbertogiacobbi.biz/vibeware/manifesto
-# Created with AI: OpenAI Codex assisted the initial implementation; Git history
-# Human guidance: Umberto Giacobbi defined the purpose and audio behavior
-# Evidence: Git history
-# Copyright (c) 2026 Umberto Giacobbi
-# License: MIT
-# VBWR E
-
-name: Build
+name: Portable Windows ZIPs
 
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
 
 permissions:
   contents: read
 
 jobs:
-  build:
+  portable:
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: x64
+            runtime: win-x64
+          - architecture: ARM64
+            runtime: win-arm64
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
-      - name: Restore locked packages
-        run: dotnet restore VoiceDucker.csproj --locked-mode -p:Platform=x64 -r win-x64
-      - name: Build x64 Debug
-        run: dotnet build VoiceDucker.csproj -c Debug -p:Platform=x64 -r win-x64 --no-restore
+      - name: Clean and build portable app
+        shell: pwsh
+        run: ./scripts/build.ps1 -Architecture '${{ matrix.architecture }}' -Configuration Release
+      - name: Create portable ZIP
+        shell: pwsh
+        run: |
+          $folder = 'artifacts/app/${{ matrix.runtime }}'
+          if (-not (Test-Path (Join-Path $folder 'VoiceDucker.exe'))) {
+            throw 'The published executable is missing.'
+          }
+          $zip = 'artifacts/VoiceDucker-${{ matrix.runtime }}.zip'
+          Compress-Archive -Path (Join-Path $folder '*') -DestinationPath $zip -Force
+          if (-not (Test-Path $zip)) { throw 'The portable ZIP is missing.' }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: VoiceDucker-${{ matrix.runtime }}
+          path: artifacts/VoiceDucker-${{ matrix.runtime }}.zip
+          if-no-files-found: error
+
+  build:
+    needs: portable
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: VoiceDucker-win-*
+          path: artifacts/portable
+          merge-multiple: true
+      - name: Verify both ZIPs
+        run: |
+          test -f artifacts/portable/VoiceDucker-win-x64.zip
+          test -f artifacts/portable/VoiceDucker-win-arm64.zip
+          unzip -t artifacts/portable/VoiceDucker-win-x64.zip
+          unzip -t artifacts/portable/VoiceDucker-win-arm64.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: VoiceDucker-win-*
+          path: artifacts/release
+          merge-multiple: true
+      - name: Publish only the portable ZIPs
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $files = @(Get-ChildItem artifacts/release -Filter 'VoiceDucker-win-*.zip' -File)
+          if ($files.Count -ne 2) { throw 'Both x64 and ARM64 ZIPs are required.' }
+          $tag = '${{ github.ref_name }}'
+          if (gh release view $tag --repo '${{ github.repository }}' 2>$null) {
+            gh release upload $tag $files.FullName --clobber --repo '${{ github.repository }}'
+          } else {
+            gh release create $tag $files.FullName --generate-notes --repo '${{ github.repository }}'
+          }

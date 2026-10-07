@@ -17,12 +17,19 @@ using NAudio.Wave;
 
 namespace VoiceDucker.Audio;
 
-public sealed class DuckingEngine : IDisposable
+internal sealed class DuckingEngine : IDisposable
 {
     private readonly object _stateLock = new();
     private Thread? _worker;
     private ManualResetEventSlim? _stop;
-    private string? _lastMessage;
+    private DuckingSettings _settings;
+    private EngineStatus? _lastStatus;
+    private double _microphoneLevel;
+
+    public DuckingEngine(DuckingSettings settings)
+    {
+        _settings = settings.IsValid ? settings : throw new ArgumentOutOfRangeException(nameof(settings));
+    }
 
     public event Action<EngineStatus>? StatusChanged;
 
@@ -37,6 +44,15 @@ public sealed class DuckingEngine : IDisposable
         }
     }
 
+    public void UpdateSettings(DuckingSettings settings)
+    {
+        if (!settings.IsValid)
+        {
+            throw new ArgumentOutOfRangeException(nameof(settings));
+        }
+        Volatile.Write(ref _settings, settings);
+    }
+
     public void Start()
     {
         Thread worker;
@@ -49,7 +65,7 @@ public sealed class DuckingEngine : IDisposable
 
             _stop?.Dispose();
             _stop = new ManualResetEventSlim(false);
-            _lastMessage = null;
+            _lastStatus = null;
             var stop = _stop;
             worker = new Thread(() => Run(stop))
             {
@@ -59,7 +75,7 @@ public sealed class DuckingEngine : IDisposable
             _worker = worker;
         }
 
-        Publish(true, "Starting microphone...");
+        Publish(true, false, 0, 0, "Starting microphone...");
         worker.Start();
     }
 
@@ -74,7 +90,8 @@ public sealed class DuckingEngine : IDisposable
 
         if (worker is not null && worker.IsAlive && !worker.Join(TimeSpan.FromSeconds(5)))
         {
-            Publish(true, "Stopping is taking longer than expected. Audio restoration is not confirmed.");
+            Publish(true, false, 0, 0,
+                "Stopping is taking longer than expected. Audio restoration is not confirmed.");
         }
     }
 
@@ -101,21 +118,30 @@ public sealed class DuckingEngine : IDisposable
             capture.DataAvailable += (_, args) =>
             {
                 var audio = args.Buffer.AsSpan(0, args.BytesRecorded);
-                gate.Observe(MicrophoneLevel.Rms(audio, capture.WaveFormat));
+                var level = MicrophoneLevel.Rms(audio, capture.WaveFormat);
+                Volatile.Write(ref _microphoneLevel, level);
+                gate.Observe(level);
             };
             playback = new PlaybackSessions();
             capture.StartRecording();
 
-            while (!stop.Wait(150))
+            while (!stop.Wait(50))
             {
                 var speaking = gate.IsSpeaking;
-                var lowered = playback.Update(speaking);
+                var settings = Volatile.Read(ref _settings);
+                var lowered = playback.Update(speaking, settings);
                 var message = speaking && lowered > 0
-                    ? $"Microphone sound detected. {lowered} playing audio session(s) are 50% quieter."
+                    ? $"Microphone sound detected. Reducing {lowered} playing session(s) by up to {settings.ReductionPercent}%."
                     : speaking
-                        ? "Microphone sound detected. No playing audio to lower."
-                        : "Listening. Playback is at its previous level.";
-                Publish(true, message);
+                        ? settings.IncludeOtherSources
+                            ? "Microphone sound detected. No playing audio to lower."
+                            : "Microphone sound detected. No Spotify playback to lower."
+                        : playback.HasOwnedSessions
+                            ? "Listening. Playback is returning to its previous level."
+                            : "Listening. Playback is at its previous level.";
+                var visualLevel = Math.Round(Math.Clamp(
+                    Volatile.Read(ref _microphoneLevel) / 0.08, 0, 1) * 20) / 20;
+                Publish(true, speaking, lowered, visualLevel, message);
             }
 
             capture.StopRecording();
@@ -139,21 +165,24 @@ public sealed class DuckingEngine : IDisposable
                 playback.Dispose();
             }
 
-            Publish(false, error ?? "Off. Your microphone is not in use.");
+            Volatile.Write(ref _microphoneLevel, 0);
+            Publish(false, false, 0, 0, error ?? "Off. Your microphone is not in use.");
         }
     }
 
-    private void Publish(bool running, string message)
+    private void Publish(bool running, bool speaking, int affectedSessions,
+        double microphoneLevel, string message)
     {
+        var status = new EngineStatus(running, speaking, affectedSessions, microphoneLevel, message);
         lock (_stateLock)
         {
-            if (_lastMessage == message)
+            if (_lastStatus == status)
             {
                 return;
             }
-            _lastMessage = message;
+            _lastStatus = status;
         }
 
-        StatusChanged?.Invoke(new EngineStatus(running, message));
+        StatusChanged?.Invoke(status);
     }
 }
