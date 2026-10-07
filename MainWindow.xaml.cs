@@ -337,7 +337,7 @@ public sealed partial class MainWindow : Window
         NoStreamsText.Visibility = streams.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (layoutChanged)
         {
-            WindowContentSizing.Fit(this, RootPanel, 520);
+            WindowContentSizing.Fit(this, RootPanel, 520, preservePosition: true);
         }
     }
 
