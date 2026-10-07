@@ -111,6 +111,8 @@ VBWR E -->
                                SmallChange="100" SpinButtonPlacementMode="Compact"
                                ValueChanged="SettingBox_ValueChanged" />
                 </Grid>
+                <TextBlock Text="Fade back is the time to return to the previous volume (for example, 10% to 100%)."
+                           TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
                 <CheckBox x:Name="StartupCheckBox" Content="Start with Windows (opens with mic off)"
                           Click="StartupCheckBox_Click" />
                 <TextBlock x:Name="FeedbackText" TextWrapping="Wrap" FontSize="12" />

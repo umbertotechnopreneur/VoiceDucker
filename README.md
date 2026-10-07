@@ -13,8 +13,7 @@ repository and part of the [VibeWare initiative](https://umbertogiacobbi.biz/vib
 
 <img src="docs/screenshots/main-window.png" alt="VoiceDucker main window showing microphone status, audio settings, and active streams" width="480">
 
-The screenshot shows fade back set to 30,000 ms; the first-run default is
-5,000 ms.
+The screenshot shows the first-run audio defaults.
 
 VoiceDucker watches the default Windows communications microphone **only after
 I press Enable**. When its signal crosses a threshold, the app lowers the
@@ -22,7 +21,9 @@ volume of Spotify sessions currently playing on active output devices. An
 **Also lower other apps** check box includes other active playback sessions. The
 reduction is configurable from 0 to 100% (90% by default). Fade down accepts
 0 to 5000 ms (300 ms by default), and fade back accepts 0 to 30000 ms
-(5000 ms by default). It restores levels it still owns after a short quiet
+(30000 ms by default). Fade back is the time needed for a lowered session to
+return to its previous level, for example from 10% to 100%. It restores levels
+it still owns after a short quiet
 period. It does not change the system master volume. If I move an app's slider
 in the Windows volume mixer, VoiceDucker leaves my new level alone.
 
