@@ -8,6 +8,40 @@ internal static class StartupRegistration
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "VibeWare.VoiceDucker";
     private const string StartupTaskId = "VoiceDuckerStartup";
+    private static readonly string PreferencePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "VibeWare", "VoiceDucker", "startup-preference-set");
+
+    public static async Task InitializeDefaultAsync(bool hasSavedSettings)
+    {
+        if (File.Exists(PreferencePath))
+        {
+            return;
+        }
+
+        // Older installations with saved settings keep their current startup choice.
+        if (!hasSavedSettings && !await IsEnabledAsync())
+        {
+            if (IsPackaged())
+            {
+                var task = await StartupTask.GetAsync(StartupTaskId);
+                if (task.State == StartupTaskState.DisabledByUser)
+                {
+                    SavePreferenceMarker();
+                    return;
+                }
+            }
+            await SetEnabledAsync(true);
+        }
+
+        SavePreferenceMarker();
+    }
+
+    public static void SavePreferenceMarker()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(PreferencePath)!);
+        File.WriteAllText(PreferencePath, string.Empty);
+    }
 
     public static async Task<bool> IsEnabledAsync()
     {

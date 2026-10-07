@@ -107,7 +107,7 @@ VBWR E -->
                                SmallChange="100" SpinButtonPlacementMode="Compact"
                                ValueChanged="SettingBox_ValueChanged" />
                     <TextBlock Grid.Row="2" Text="Fade back (ms)" VerticalAlignment="Center" />
-                    <NumberBox x:Name="FadeUpBox" Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="5000"
+                    <NumberBox x:Name="FadeUpBox" Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="30000"
                                SmallChange="100" SpinButtonPlacementMode="Compact"
                                ValueChanged="SettingBox_ValueChanged" />
                 </Grid>

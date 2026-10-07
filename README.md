@@ -9,27 +9,36 @@ and I offer it as is, without guarantees.
 I am **Umberto Giacobbi**, the creator of VoiceDucker. This is my MIT-licensed
 repository and part of the [VibeWare initiative](https://umbertogiacobbi.biz/vibeware/manifesto).
 
+## Screenshots
+
+<img src="docs/screenshots/main-window.png" alt="VoiceDucker main window showing microphone status, audio settings, and active streams" width="480">
+
+The screenshot shows fade back set to 30,000 ms; the first-run default is
+5,000 ms.
+
 VoiceDucker watches the default Windows communications microphone **only after
 I press Enable**. When its signal crosses a threshold, the app lowers the
 volume of Spotify sessions currently playing on active output devices. An
 **Also lower other apps** check box includes other active playback sessions. The
-reduction is configurable from 0 to 100% (50% by default). Fade down and fade
-back each accept 0 to 5000 ms (1000 ms by default). It restores levels it still
-owns after a short quiet period. It does not change
-the system master volume. If I move an app's slider in the Windows volume
-mixer, VoiceDucker leaves my new level alone.
+reduction is configurable from 0 to 100% (90% by default). Fade down accepts
+0 to 5000 ms (300 ms by default), and fade back accepts 0 to 30000 ms
+(5000 ms by default). It restores levels it still owns after a short quiet
+period. It does not change the system master volume. If I move an app's slider
+in the Windows volume mixer, VoiceDucker leaves my new level alone.
 
 The main window shows a microphone-responsive mixer illustration. Its orange
 microphone rays are off until capture is enabled, then pulse like a recording
 light. The microphone icon changes to a softly pulsing dark red LED. Mixer bars
 follow the microphone signal level. Active audio sessions appear below the
 settings with each process's Windows icon, a session volume slider and a
-playback meter. Moving a
-slider changes that session's Windows mixer level; VoiceDucker then releases
-its claim on the user's new volume. Settings are saved under the current user's local app
-data. The optional **Start with Windows** check box registers the current EXE
-path for that user; it opens the app with microphone capture still off. Keep the
-portable folder in a stable location if this option is enabled.
+playback meter. Moving a slider changes that session's Windows mixer level;
+VoiceDucker then releases its claim on the user's new volume. Settings are
+saved under the current user's local app data. **Start with Windows** is enabled
+on a new installation's first launch; the check box can turn it off later.
+The startup choice is remembered on subsequent launches. Existing installations
+with saved audio settings keep their Windows startup state. The app opens with
+microphone capture still off. Keep the portable folder in a stable location if
+this option is enabled.
 
 Closing the window offers **Minimize to tray**, **Close app**, or **Cancel** in
 an acrylic window. The tray menu can show or hide the window, enable or disable
@@ -97,7 +106,7 @@ brand repository. VoiceDucker is under the [MIT license](LICENSE).
 ---
 
 <a href="https://umbertogiacobbi.biz/vibeware/manifesto">
-  <img align="right" src="https://raw.githubusercontent.com/umbertotechnopreneur/VibeWare/main/Branding/vibeware-logo.png" alt="VibeWare floppy logo" width="180">
+  <img align="right" src="Assets/vibeware-logo.png" alt="VibeWare floppy logo" width="180">
 </a>
 
 ### This is VibeWare

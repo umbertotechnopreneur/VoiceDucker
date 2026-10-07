@@ -9,6 +9,8 @@ internal static class SettingsStore
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "VibeWare", "VoiceDucker", "settings.json");
 
+    public static bool HasSavedSettings => File.Exists(SettingsPath);
+
     public static DuckingSettings Load(out string? error)
     {
         error = null;
