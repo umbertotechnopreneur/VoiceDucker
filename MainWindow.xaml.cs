@@ -5,6 +5,7 @@
  * VibeWare initiative: Human intent. AI implementation. Accountable human review.
  * Manifesto: https://umbertogiacobbi.biz/vibeware/manifesto
  * Created with AI: OpenAI Codex assisted the initial implementation; Git history
+ * Modified with AI: OpenAI Codex; window sizing and toggle icon, 2026-10-08
  * Human guidance: Umberto Giacobbi defined the purpose and audio behavior
  * Evidence: Git history
  * Copyright (c) 2026 Umberto Giacobbi
@@ -24,7 +25,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        AppWindow.Resize(new SizeInt32(390, 330));
+        AppWindow.Resize(new SizeInt32(470, 440));
         AppWindow.SetIcon("Assets/AppIcon.ico");
         _engine.StatusChanged += OnStatusChanged;
         Closed += OnClosed;
@@ -49,7 +50,8 @@ public sealed partial class MainWindow : Window
         DispatcherQueue.TryEnqueue(() =>
         {
             StatusText.Text = status.Message;
-            ToggleButton.Content = status.Running ? "Disable" : "Enable";
+            ToggleButtonLabel.Text = status.Running ? "Disable" : "Enable";
+            ToggleButtonIcon.Glyph = status.Running ? "\uE769" : "\uE768";
         });
     }
 

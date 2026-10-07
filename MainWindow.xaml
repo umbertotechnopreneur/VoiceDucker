@@ -6,7 +6,7 @@
   VibeWare initiative: Human intent. AI implementation. Accountable human review.
   Manifesto: https://umbertogiacobbi.biz/vibeware/manifesto
   Created with AI: OpenAI Codex assisted the initial implementation; Git history
-  Modified with AI: OpenAI Codex; playback wording, 2026-10-08
+  Modified with AI: OpenAI Codex; playback wording, links, and controls, 2026-10-08
   Human guidance: Umberto Giacobbi defined the purpose and audio behavior
   Evidence: Git history
   Copyright (c) 2026 Umberto Giacobbi
@@ -21,7 +21,7 @@ VBWR E -->
         <DesktopAcrylicBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid Padding="20" RowSpacing="18">
+    <Grid Padding="24" RowSpacing="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -29,7 +29,7 @@ VBWR E -->
 
         <TextBlock Text="VOICEDUCKER" FontFamily="Consolas" FontSize="19" FontWeight="Bold" />
 
-        <StackPanel Grid.Row="1" Spacing="14">
+        <StackPanel Grid.Row="1" Spacing="16">
             <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                 <Image Source="Assets/vibeware-logo.png" Width="68" Height="68" Stretch="Uniform" />
                 <StackPanel VerticalAlignment="Center" Spacing="3">
@@ -39,11 +39,34 @@ VBWR E -->
             </StackPanel>
 
             <TextBlock x:Name="StatusText" Text="Off. Your microphone is not in use." TextWrapping="Wrap" />
-            <Button x:Name="ToggleButton" Content="Enable" Click="ToggleButton_Click"
-                    HorizontalAlignment="Stretch" MinHeight="42"
-                    Background="#346A9C" Foreground="#FFF4DC" />
+            <Button x:Name="ToggleButton" Click="ToggleButton_Click"
+                    HorizontalAlignment="Stretch" MinHeight="48"
+                    Background="#346A9C" Foreground="#FFF4DC">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <FontIcon x:Name="ToggleButtonIcon" Glyph="&#xE768;" FontFamily="Segoe Fluent Icons" FontSize="16" />
+                    <TextBlock x:Name="ToggleButtonLabel" Text="Enable" />
+                </StackPanel>
+            </Button>
             <TextBlock Text="Playing audio returns to its previous level when the mic is quiet."
                        FontSize="12" Opacity="0.65" TextWrapping="Wrap" />
+
+            <Border Background="#263B50" CornerRadius="8" Padding="14,10">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="Like it? Give it a star or contribute." FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <HyperlinkButton Content="Open VoiceDucker on GitHub ↗"
+                                     NavigateUri="https://github.com/umbertotechnopreneur/VoiceDucker"
+                                     Padding="0" Foreground="#9DD4FF" />
+                </StackPanel>
+            </Border>
+
+            <StackPanel Orientation="Horizontal" Spacing="14">
+                <HyperlinkButton Content="Umberto's site ↗"
+                                 NavigateUri="https://umbertogiacobbi.biz"
+                                 Padding="0" />
+                <HyperlinkButton Content="VibeWare manifesto ↗"
+                                 NavigateUri="https://umbertogiacobbi.biz/vibeware/manifesto"
+                                 Padding="0" />
+            </StackPanel>
         </StackPanel>
     </Grid>
 </Window>
