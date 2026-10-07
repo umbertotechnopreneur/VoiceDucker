@@ -7,7 +7,8 @@
     <Window.SystemBackdrop>
         <DesktopAcrylicBackdrop />
     </Window.SystemBackdrop>
-    <StackPanel Padding="24" Spacing="18">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel x:Name="ClosePanel" Padding="24" Spacing="18">
         <StackPanel Orientation="Horizontal" Spacing="12">
             <Image Source="Assets/about-banner.png" Width="52" Height="52" />
             <StackPanel VerticalAlignment="Center" Spacing="3">
@@ -25,4 +26,5 @@
                     Background="#346A9C" Foreground="#FFF4DC" />
         </StackPanel>
     </StackPanel>
+    </ScrollViewer>
 </Window>

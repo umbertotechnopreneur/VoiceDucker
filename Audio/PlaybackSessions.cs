@@ -25,6 +25,7 @@ internal sealed class PlaybackSessions : IDisposable
     private readonly MMDeviceEnumerator _devices = new();
     private readonly Dictionary<string, SavedVolume> _saved = new(StringComparer.Ordinal);
     private readonly HashSet<string> _manualOverrides = new(StringComparer.Ordinal);
+    private readonly Dictionary<int, bool> _spotifyProcesses = new();
 
     public bool HasOwnedSessions => _saved.Count > 0;
 
@@ -47,6 +48,7 @@ internal sealed class PlaybackSessions : IDisposable
                     var key = endpoint.ID + ":" + session.GetSessionInstanceIdentifier;
                     seen.Add(key);
                     var volume = session.SimpleAudioVolume;
+                    var eligible = settings.IncludeOtherSources || IsSpotify(session);
 
                     if (_saved.TryGetValue(key, out var saved))
                     {
@@ -66,7 +68,7 @@ internal sealed class PlaybackSessions : IDisposable
                         }
                         else
                         {
-                            var target = shouldDuck
+                            var target = shouldDuck && eligible
                                 ? saved.Original * (1f - settings.ReductionPercent / 100f)
                                 : saved.Original;
                             var movingDown = IsAt(target, saved.Target)
@@ -94,7 +96,7 @@ internal sealed class PlaybackSessions : IDisposable
                             }
                             saved.Expected = next;
 
-                            if (!shouldDuck && fraction >= 1f)
+                            if ((!shouldDuck || !eligible) && fraction >= 1f)
                             {
                                 _saved.Remove(key);
                             }
@@ -106,7 +108,7 @@ internal sealed class PlaybackSessions : IDisposable
                         continue;
                     }
 
-                    if (!shouldDuck || _manualOverrides.Contains(key) || volume.Mute ||
+                    if (!shouldDuck || !eligible || _manualOverrides.Contains(key) || volume.Mute ||
                         settings.ReductionPercent == 0 ||
                         session.State != AudioSessionState.AudioSessionStateActive ||
                         session.AudioMeterInformation.MasterPeakValue <= AudiblePeak)
@@ -154,6 +156,25 @@ internal sealed class PlaybackSessions : IDisposable
 
     private static bool IsAt(float actual, float expected) =>
         Math.Abs(actual - expected) < VolumeTolerance;
+
+    private bool IsSpotify(AudioSessionControl session)
+    {
+        var processId = (int)session.GetProcessID;
+        if (processId <= 0)
+        {
+            return false;
+        }
+
+        if (_spotifyProcesses.TryGetValue(processId, out var spotify))
+        {
+            return spotify;
+        }
+
+        spotify = PlaybackIdentity.ProcessName(processId)
+            .StartsWith("Spotify", StringComparison.OrdinalIgnoreCase);
+        _spotifyProcesses[processId] = spotify;
+        return spotify;
+    }
 
     private sealed class SavedVolume(float original, float target, long startTick, int duration)
     {

@@ -8,7 +8,7 @@
         <DesktopAcrylicBackdrop />
     </Window.SystemBackdrop>
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Padding="22" Spacing="14">
+        <StackPanel x:Name="AboutPanel" Padding="22" Spacing="14">
             <Grid Height="200" HorizontalAlignment="Center" Width="200">
                 <Image Source="Assets/about-banner.png" Stretch="UniformToFill" />
             </Grid>

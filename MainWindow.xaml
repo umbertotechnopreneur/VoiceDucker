@@ -23,10 +23,12 @@ VBWR E -->
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel x:Name="RootPanel" Padding="22" Spacing="16">
             <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                <Border Width="42" Height="42" Background="#263B50"
+                <Border x:Name="MicStatusBorder" Width="42" Height="42" Background="#263B50"
                         BorderBrush="#F6A24C" BorderThickness="1" CornerRadius="2">
-                    <FontIcon Glyph="&#xE720;" FontFamily="Segoe Fluent Icons"
-                              FontSize="22" Foreground="#F6A24C" />
+                    <Grid>
+                        <FontIcon x:Name="MicStatusIcon" Glyph="&#xE720;" FontFamily="Segoe Fluent Icons"
+                                  FontSize="22" Foreground="#F6A24C" />
+                    </Grid>
                 </Border>
                 <StackPanel VerticalAlignment="Center" Spacing="2">
                     <TextBlock Text="VoiceDucker" FontFamily="Consolas" FontSize="23"
@@ -41,11 +43,19 @@ VBWR E -->
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <Grid Width="164" Height="164">
-                    <Image x:Name="MixerImage" Source="Assets/voice-mixer.png" Stretch="UniformToFill" Opacity="0.65">
-                        <Image.RenderTransform>
+                    <Grid>
+                        <Grid.RenderTransform>
                             <ScaleTransform x:Name="MixerScale" CenterX="82" CenterY="82" />
-                        </Image.RenderTransform>
-                    </Image>
+                        </Grid.RenderTransform>
+                        <Image x:Name="MixerImage" Source="Assets/voice-mixer-off.png"
+                               Stretch="UniformToFill" Opacity="0.65" />
+                        <Image x:Name="MixerOnImage" Source="Assets/voice-mixer.png"
+                               Stretch="UniformToFill" Opacity="0">
+                            <Image.Clip>
+                                <RectangleGeometry Rect="62,39,42,21" />
+                            </Image.Clip>
+                        </Image>
+                    </Grid>
                     <Border x:Name="MicGlow" CornerRadius="12" BorderThickness="3"
                             BorderBrush="#F6A24C" Opacity="0" />
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
@@ -104,6 +114,17 @@ VBWR E -->
                 <CheckBox x:Name="StartupCheckBox" Content="Start with Windows (opens with mic off)"
                           Click="StartupCheckBox_Click" />
                 <TextBlock x:Name="FeedbackText" TextWrapping="Wrap" FontSize="12" />
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="ACTIVE AUDIO STREAMS" FontFamily="Consolas" FontWeight="SemiBold" />
+                <CheckBox x:Name="OtherSourcesCheckBox" Content="Also lower other apps"
+                          Click="OtherSourcesCheckBox_Click" />
+                <TextBlock Text="Spotify is lowered by default. Sliders control each app's Windows audio session."
+                           TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
+                <StackPanel x:Name="StreamRows" Spacing="8" />
+                <TextBlock x:Name="NoStreamsText" Text="No apps playing audio right now."
+                           FontSize="12" Opacity="0.68" />
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="12">

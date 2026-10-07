@@ -133,7 +133,9 @@ internal sealed class DuckingEngine : IDisposable
                 var message = speaking && lowered > 0
                     ? $"Microphone sound detected. Reducing {lowered} playing session(s) by up to {settings.ReductionPercent}%."
                     : speaking
-                        ? "Microphone sound detected. No playing audio to lower."
+                        ? settings.IncludeOtherSources
+                            ? "Microphone sound detected. No playing audio to lower."
+                            : "Microphone sound detected. No Spotify playback to lower."
                         : playback.HasOwnedSessions
                             ? "Listening. Playback is returning to its previous level."
                             : "Listening. Playback is at its previous level.";

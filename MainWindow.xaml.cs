@@ -14,8 +14,14 @@
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
+using Microsoft.UI.Xaml.Media.Imaging;
 using VoiceDucker.Audio;
+using Windows.Foundation;
 using Windows.Graphics;
+using Windows.Storage.Streams;
+using Windows.UI;
 
 namespace VoiceDucker;
 
@@ -28,29 +34,55 @@ public sealed partial class MainWindow : Window
     private CloseChoiceWindow? _closeChoice;
     private bool _settingsReady;
     private bool _allowClose;
+    private bool _micLedActive;
+    private readonly Storyboard _micLedPulse = new();
+    private readonly Storyboard _mixerPulse = new();
+    private readonly Dictionary<string, StreamRow> _streamRows = new(StringComparer.Ordinal);
+    private PlaybackMonitor? _playbackMonitor;
+    private DispatcherTimer? _streamTimer;
+    private bool _refreshingStreamRows;
 
     public MainWindow()
     {
         InitializeComponent();
-        AppWindow.Resize(new SizeInt32(520, 620));
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
+
+        var pulse = new DoubleAnimation
+        {
+            From = 0.15,
+            To = 1,
+            Duration = new Duration(TimeSpan.FromMilliseconds(900)),
+            AutoReverse = true,
+            RepeatBehavior = RepeatBehavior.Forever,
+            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+        };
+        Storyboard.SetTarget(pulse, MicStatusIcon);
+        Storyboard.SetTargetProperty(pulse, "Opacity");
+        _micLedPulse.Children.Add(pulse);
+
+        var mixerPulse = new DoubleAnimation
+        {
+            From = 0,
+            To = 1,
+            Duration = new Duration(TimeSpan.FromMilliseconds(900)),
+            AutoReverse = true,
+            RepeatBehavior = RepeatBehavior.Forever,
+            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+        };
+        Storyboard.SetTarget(mixerPulse, MixerOnImage);
+        Storyboard.SetTargetProperty(mixerPulse, "Opacity");
+        _mixerPulse.Children.Add(mixerPulse);
 
         _settings = SettingsStore.Load(out var settingsError);
         _engine = new DuckingEngine(_settings);
         ReductionBox.Value = _settings.ReductionPercent;
         FadeDownBox.Value = _settings.FadeDownMilliseconds;
         FadeUpBox.Value = _settings.FadeUpMilliseconds;
+        OtherSourcesCheckBox.IsChecked = _settings.IncludeOtherSources;
         _settingsReady = true;
         FeedbackText.Text = settingsError ?? string.Empty;
 
-        try
-        {
-            StartupCheckBox.IsChecked = StartupRegistration.IsEnabled();
-        }
-        catch (Exception exception)
-        {
-            FeedbackText.Text = $"Windows startup status could not be read: {exception.Message}";
-        }
+        StartupCheckBox.IsEnabled = false;
 
         _engine.StatusChanged += OnStatusChanged;
         AppWindow.Closing += OnWindowClosing;
@@ -58,9 +90,22 @@ public sealed partial class MainWindow : Window
         Closed += OnClosed;
     }
 
-    private void OnRootLoaded(object sender, RoutedEventArgs args)
+    private async void OnRootLoaded(object sender, RoutedEventArgs args)
     {
         RootPanel.Loaded -= OnRootLoaded;
+        WindowContentSizing.Fit(this, RootPanel, 520);
+        try
+        {
+            _playbackMonitor = new PlaybackMonitor();
+            _streamTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            _streamTimer.Tick += (_, _) => RefreshStreamRows();
+            RefreshStreamRows();
+            _streamTimer.Start();
+        }
+        catch (Exception exception)
+        {
+            FeedbackText.Text = $"Audio streams could not be listed: {exception.Message}";
+        }
         try
         {
             var handle = WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -74,6 +119,18 @@ public sealed partial class MainWindow : Window
         catch (Exception exception)
         {
             FeedbackText.Text = $"Tray is unavailable: {exception.Message}";
+        }
+        try
+        {
+            StartupCheckBox.IsChecked = await StartupRegistration.IsEnabledAsync();
+        }
+        catch (Exception exception)
+        {
+            FeedbackText.Text = $"Windows startup status could not be read: {exception.Message}";
+        }
+        finally
+        {
+            StartupCheckBox.IsEnabled = true;
         }
     }
 
@@ -118,7 +175,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var next = new DuckingSettings((int)values[0], (int)values[1], (int)values[2]);
+        var next = new DuckingSettings((int)values[0], (int)values[1], (int)values[2],
+            _settings.IncludeOtherSources);
         if (!next.IsValid)
         {
             FeedbackText.Text = "Reduction must be 0–100%; fade times must be 0–5000 ms.";
@@ -127,9 +185,26 @@ public sealed partial class MainWindow : Window
 
         _settings = next;
         _engine.UpdateSettings(next);
+        SaveSettings();
+    }
+
+    private void OtherSourcesCheckBox_Click(object sender, RoutedEventArgs args)
+    {
+        if (!_settingsReady)
+        {
+            return;
+        }
+
+        _settings = _settings with { IncludeOtherSources = OtherSourcesCheckBox.IsChecked == true };
+        _engine.UpdateSettings(_settings);
+        SaveSettings();
+    }
+
+    private void SaveSettings()
+    {
         try
         {
-            SettingsStore.Save(next);
+            SettingsStore.Save(_settings);
             FeedbackText.Text = string.Empty;
         }
         catch (Exception exception)
@@ -138,11 +213,12 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void StartupCheckBox_Click(object sender, RoutedEventArgs args)
+    private async void StartupCheckBox_Click(object sender, RoutedEventArgs args)
     {
+        StartupCheckBox.IsEnabled = false;
         try
         {
-            StartupRegistration.SetEnabled(StartupCheckBox.IsChecked == true);
+            await StartupRegistration.SetEnabledAsync(StartupCheckBox.IsChecked == true);
             FeedbackText.Text = string.Empty;
         }
         catch (Exception exception)
@@ -150,12 +226,16 @@ public sealed partial class MainWindow : Window
             FeedbackText.Text = $"Windows startup could not be changed: {exception.Message}";
             try
             {
-                StartupCheckBox.IsChecked = StartupRegistration.IsEnabled();
+                StartupCheckBox.IsChecked = await StartupRegistration.IsEnabledAsync();
             }
             catch
             {
                 StartupCheckBox.IsChecked = false;
             }
+        }
+        finally
+        {
+            StartupCheckBox.IsEnabled = true;
         }
     }
 
@@ -166,6 +246,7 @@ public sealed partial class MainWindow : Window
             StatusText.Text = status.Message;
             ToggleButtonLabel.Text = status.Running ? "Disable" : "Enable";
             ToggleButtonIcon.Glyph = status.Running ? "\uE769" : "\uE768";
+            SetMicLedActive(status.Running);
 
             VisualStateText.Text = !status.Running ? "MIC OFF" :
                 status.Speaking && status.AffectedSessions > 0 ? "AUDIO LOWERING" :
@@ -193,6 +274,265 @@ public sealed partial class MainWindow : Window
                 bars[index].Opacity = status.Running ? 0.5 + level * 0.5 : 0.25;
             }
         });
+    }
+
+    private void RefreshStreamRows()
+    {
+        if (_playbackMonitor is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<PlaybackStream> streams;
+        try
+        {
+            streams = _playbackMonitor.Read();
+        }
+        catch (Exception exception)
+        {
+            FeedbackText.Text = $"Audio streams could not be refreshed: {exception.Message}";
+            return;
+        }
+
+        var present = streams.Select(stream => stream.Key).ToHashSet(StringComparer.Ordinal);
+        var layoutChanged = false;
+        foreach (var key in _streamRows.Keys.Where(key => !present.Contains(key)).ToArray())
+        {
+            StreamRows.Children.Remove(_streamRows[key].Card);
+            _streamRows.Remove(key);
+            layoutChanged = true;
+        }
+
+        _refreshingStreamRows = true;
+        try
+        {
+            foreach (var stream in streams.OrderByDescending(stream => stream.IsSpotify)
+                         .ThenBy(stream => stream.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                if (!_streamRows.TryGetValue(stream.Key, out var row))
+                {
+                    row = CreateStreamRow(stream);
+                    _streamRows.Add(stream.Key, row);
+                    StreamRows.Children.Add(row.Card);
+                    _ = LoadStreamIconAsync(stream.ProcessId, stream.Key, row.Icon);
+                    layoutChanged = true;
+                }
+
+                row.Meter.Value = Math.Clamp(stream.Peak * 100, 0, 100);
+                row.Slider.IsEnabled = !stream.Muted;
+                if (!row.Interacting && row.Slider.FocusState == FocusState.Unfocused)
+                {
+                    row.Slider.Value = Math.Clamp(stream.Volume * 100, 0, 100);
+                    row.Percentage.Text = stream.Muted
+                        ? "MUTED"
+                        : $"{Math.Round(stream.Volume * 100):0}%";
+                }
+            }
+        }
+        finally
+        {
+            _refreshingStreamRows = false;
+        }
+
+        NoStreamsText.Visibility = streams.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (layoutChanged)
+        {
+            WindowContentSizing.Fit(this, RootPanel, 520);
+        }
+    }
+
+    private async Task LoadStreamIconAsync(int processId, string key, Image icon)
+    {
+        try
+        {
+            var png = await Task.Run(() => ProcessIcon.ReadPng(processId));
+            if (png is null)
+            {
+                return;
+            }
+
+            using var stream = new InMemoryRandomAccessStream();
+            using (var writer = new DataWriter(stream))
+            {
+                writer.WriteBytes(png);
+                await writer.StoreAsync();
+                writer.DetachStream();
+            }
+            stream.Seek(0);
+            var source = new BitmapImage();
+            await source.SetSourceAsync(stream);
+            if (_streamRows.TryGetValue(key, out var row) && ReferenceEquals(row.Icon, icon))
+            {
+                icon.Source = source;
+            }
+        }
+        catch (Exception)
+        {
+            // Protected or short-lived processes keep the generic app glyph.
+        }
+    }
+
+    private StreamRow CreateStreamRow(PlaybackStream stream)
+    {
+        var name = new TextBlock
+        {
+            Text = stream.IsSpotify ? "SPOTIFY" : stream.Name.ToUpperInvariant(),
+            FontFamily = new FontFamily("Consolas"),
+            FontSize = 12
+        };
+        var percentage = new TextBlock
+        {
+            Text = $"{Math.Round(stream.Volume * 100):0}%",
+            FontFamily = new FontFamily("Consolas"),
+            FontSize = 12,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        var title = new Grid();
+        title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });
+        Grid.SetColumn(percentage, 1);
+        title.Children.Add(name);
+        title.Children.Add(percentage);
+        var icon = new Image { Width = 20, Height = 20, Stretch = Stretch.Uniform };
+        var iconPlaceholder = new FontIcon
+        {
+            Glyph = "\uE80A",
+            FontFamily = new FontFamily("Segoe Fluent Icons"),
+            FontSize = 16,
+            Opacity = 0.55
+        };
+        var iconLayer = new Grid { Width = 20, Height = 20, Margin = new Thickness(6, 0, 0, 0) };
+        iconLayer.Children.Add(iconPlaceholder);
+        iconLayer.Children.Add(icon);
+        Grid.SetColumn(iconLayer, 2);
+        title.Children.Add(iconLayer);
+
+        var slider = new Slider
+        {
+            Minimum = 0,
+            Maximum = 100,
+            StepFrequency = 1,
+            Value = Math.Clamp(stream.Volume * 100, 0, 100),
+            IsEnabled = !stream.Muted
+        };
+        var meter = new ProgressBar
+        {
+            Minimum = 0,
+            Maximum = 100,
+            Height = 5,
+            Value = Math.Clamp(stream.Peak * 100, 0, 100),
+            Foreground = new SolidColorBrush(stream.IsSpotify
+                ? Color.FromArgb(255, 246, 162, 76)
+                : Color.FromArgb(255, 109, 171, 202))
+        };
+        var panel = new StackPanel { Spacing = 4 };
+        panel.Children.Add(title);
+        panel.Children.Add(slider);
+        panel.Children.Add(meter);
+        var card = new Border
+        {
+            Child = panel,
+            Padding = new Thickness(10),
+            CornerRadius = new CornerRadius(4),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(150, 69, 88, 106)),
+            Background = new SolidColorBrush(Color.FromArgb(85, 13, 28, 44))
+        };
+        var row = new StreamRow(card, slider, meter, percentage, icon);
+        slider.PointerPressed += (_, _) => row.Interacting = true;
+        slider.PointerReleased += (_, _) => row.Interacting = false;
+        slider.PointerCanceled += (_, _) => row.Interacting = false;
+        slider.ValueChanged += (_, args) =>
+        {
+            if (_refreshingStreamRows || _playbackMonitor is null)
+            {
+                return;
+            }
+
+            percentage.Text = $"{Math.Round(args.NewValue):0}%";
+            try
+            {
+                if (!_playbackMonitor.SetVolume(stream.Key, (float)(args.NewValue / 100)))
+                {
+                    FeedbackText.Text = "This audio stream has ended.";
+                }
+            }
+            catch (Exception exception)
+            {
+                FeedbackText.Text = $"Volume could not be changed: {exception.Message}";
+            }
+        };
+        return row;
+    }
+
+    private sealed class StreamRow(Border card, Slider slider, ProgressBar meter,
+        TextBlock percentage, Image icon)
+    {
+        public Border Card { get; } = card;
+        public Slider Slider { get; } = slider;
+        public ProgressBar Meter { get; } = meter;
+        public TextBlock Percentage { get; } = percentage;
+        public Image Icon { get; } = icon;
+        public bool Interacting { get; set; }
+    }
+
+    private void SetMicLedActive(bool active)
+    {
+        if (_micLedActive == active)
+        {
+            return;
+        }
+
+        _micLedActive = active;
+        MicStatusBorder.Background = new SolidColorBrush(active
+            ? Color.FromArgb(255, 6, 5, 7)
+            : Color.FromArgb(255, 38, 59, 80));
+        MicStatusBorder.BorderBrush = new SolidColorBrush(active
+            ? Color.FromArgb(255, 116, 29, 39)
+            : Color.FromArgb(255, 246, 162, 76));
+        if (active)
+        {
+            var gradient = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(1, 1)
+            };
+            gradient.GradientStops.Add(new GradientStop
+            {
+                Color = Color.FromArgb(255, 126, 24, 34), Offset = 0
+            });
+            gradient.GradientStops.Add(new GradientStop
+            {
+                Color = Color.FromArgb(255, 247, 112, 106), Offset = 0.39
+            });
+            gradient.GradientStops.Add(new GradientStop
+            {
+                Color = Color.FromArgb(255, 168, 38, 45), Offset = 0.71
+            });
+            gradient.GradientStops.Add(new GradientStop
+            {
+                Color = Color.FromArgb(255, 74, 14, 23), Offset = 1
+            });
+            MicStatusIcon.Foreground = gradient;
+        }
+        else
+        {
+            MicStatusIcon.Foreground = new SolidColorBrush(Color.FromArgb(255, 246, 162, 76));
+        }
+
+        if (active)
+        {
+            _micLedPulse.Begin();
+            _mixerPulse.Begin();
+        }
+        else
+        {
+            _micLedPulse.Stop();
+            _mixerPulse.Stop();
+            MicStatusIcon.Opacity = 1;
+            MixerOnImage.Opacity = 0;
+        }
     }
 
     private void AboutButton_Click(object sender, RoutedEventArgs args) => ShowAbout();
@@ -223,11 +563,6 @@ public sealed partial class MainWindow : Window
         }
 
         _closeChoice = new CloseChoiceWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
-        var position = AppWindow.Position;
-        var size = AppWindow.Size;
-        _closeChoice.AppWindow.Move(new PointInt32(
-            position.X + (size.Width - 440) / 2,
-            position.Y + (size.Height - 235) / 2));
         _closeChoice.MinimizeRequested += MinimizeToTray;
         _closeChoice.ExitRequested += ExitApplication;
         _closeChoice.Closed += (_, _) => _closeChoice = null;
@@ -260,6 +595,10 @@ public sealed partial class MainWindow : Window
 
     private void OnClosed(object sender, WindowEventArgs args)
     {
+        _micLedPulse.Stop();
+        _mixerPulse.Stop();
+        _streamTimer?.Stop();
+        _playbackMonitor?.Dispose();
         _engine.StatusChanged -= OnStatusChanged;
         AppWindow.Closing -= OnWindowClosing;
         _tray?.Dispose();
