@@ -1,0 +1,11 @@
+bin/
+obj/
+artifacts/
+AppPackages/
+Generated Files/
+.vs/
+*.user
+*.suo
+*.pfx
+*.cer
+*.log

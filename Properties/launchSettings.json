@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "VoiceDucker (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "VoiceDucker (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
