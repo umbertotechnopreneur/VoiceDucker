@@ -25,7 +25,9 @@ reduction is configurable from 0 to 100% (90% by default). Fade down accepts
 return to its previous level, for example from 10% to 100%. It restores levels
 it still owns after a short quiet
 period. It does not change the system master volume. If I move an app's slider
-in the Windows volume mixer, VoiceDucker leaves my new level alone.
+in the Windows volume mixer, VoiceDucker leaves my new level alone. On a normal
+app exit, volumes still owned by VoiceDucker return to their prior levels over
+2,000 ms, regardless of the configured fade back time.
 
 The main window shows a microphone-responsive mixer illustration. Its orange
 microphone rays are off until capture is enabled, then pulse like a recording
