@@ -14,7 +14,6 @@
 """Copy restored dependency license notices into a distribution directory."""
 import argparse
 import json
-import os
 from pathlib import Path
 import re
 import shutil
@@ -34,13 +33,13 @@ if args.mode == 'cargo':
     command = ['cargo', 'metadata', '--locked', '--format-version', '1']
     if args.target:
         command += ['--filter-platform', args.target]
-    metadata = json.loads(subprocess.check_output(command, cwd=root, text=True))
+    metadata = json.loads(subprocess.check_output(command, cwd=root, text=True, encoding='utf-8'))
     for package in metadata['packages']:
         if package['source'] is None:
             continue
         records.append((package['name'], package['version'], package.get('license') or 'See supplied license files', package.get('repository') or '', Path(package['manifest_path']).parent))
 else:
-    cache = Path(subprocess.check_output(['dotnet', 'nuget', 'locals', 'global-packages', '--list'], cwd=root, text=True).strip().split(': ', 1)[1])
+    cache = Path(subprocess.check_output(['dotnet', 'nuget', 'locals', 'global-packages', '--list'], cwd=root, text=True, encoding='utf-8').strip().split(': ', 1)[1])
     lock = json.loads((root / 'packages.lock.json').read_text())
     seen = set()
     for dependencies in lock['dependencies'].values():
