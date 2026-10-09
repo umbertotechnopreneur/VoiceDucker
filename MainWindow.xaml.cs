@@ -136,6 +136,16 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void AdvancedOptionsExpander_SizeChanged(object sender, SizeChangedEventArgs args)
+    {
+        if (RootPanel.IsLoaded && args.NewSize.Height != args.PreviousSize.Height)
+        {
+            // Fit after the expander has laid out its expanded or collapsed content.
+            DispatcherQueue.TryEnqueue(() =>
+                WindowContentSizing.Fit(this, RootPanel, 520, preservePosition: true));
+        }
+    }
+
     private async void ToggleButton_Click(object sender, RoutedEventArgs args) =>
         await ToggleDuckingAsync();
 

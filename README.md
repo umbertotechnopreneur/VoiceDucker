@@ -23,7 +23,7 @@ The ZIP is portable and unsigned. Windows may show a security prompt. There is n
 
 ## Screenshot
 
-<img src="docs/screenshots/main-window.png" alt="VoiceDucker with audio settings and active streams" width="480">
+<img src="docs/screenshots/main-window.png" alt="VoiceDucker with the microphone off and advanced options collapsed" width="480">
 
 ## My defaults
 
