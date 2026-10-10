@@ -19,6 +19,14 @@ namespace VoiceDucker.Audio;
 
 internal static class PlaybackIdentity
 {
+    public static string NormalizeProcessName(string name) =>
+        name.Trim().EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+            ? name.Trim()[..^4]
+            : name.Trim();
+
+    public static bool IsOwnProcess(string name) =>
+        NormalizeProcessName(name).Equals("VoiceDucker", StringComparison.OrdinalIgnoreCase);
+
     public static string ProcessName(int processId)
     {
         try

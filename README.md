@@ -23,7 +23,7 @@ The ZIP is portable and unsigned. Windows may show a security prompt. There is n
 
 ## Screenshot
 
-<img src="docs/screenshots/main-window.png" alt="VoiceDucker with audio settings and active streams" width="480">
+<img src="docs/screenshots/main-window.png" alt="VoiceDucker with the microphone off and advanced options collapsed" width="480">
 
 ## My defaults
 
@@ -33,9 +33,34 @@ The ZIP is portable and unsigned. Windows may show a security prompt. There is n
 - Start with Windows, with the microphone **off** until I press Enable
 - Lower **Spotify** by default; other apps are optional
 
+Every valid audio setting is saved immediately, including while I type a number,
+and restored after app or Windows restarts. Windows startup changes take effect
+as soon as I toggle the checkbox. The microphone still starts off.
+
+The main window shows each app's Cassette 1984 panel above Advanced options:
+cream L/R analog-style VU meters and a 24-band spectrum. **Show visualizers** in
+Advanced options controls their visibility. The needles
+use stereo RMS levels (0 VU = -18 dBFS); the spectrum covers 40 Hz to 16 kHz.
+Audio is captured from the listed process and its child processes, across output
+devices, using [Windows application loopback](https://learn.microsoft.com/en-us/samples/microsoft/windows-classic-samples/applicationloopbackaudio-sample/).
+Sessions belonging to the same process share the same visualizer data. Capture
+runs while the window is visible and the visualizers are enabled;
+hiding the visualizers, minimizing the window, or exiting releases capture. Audio
+buffers stay in memory; this does not enable the microphone or record files.
+This choice is saved immediately and restored at the next launch. The retro
+[Press Start 2P font](https://github.com/google/fonts/tree/main/ofl/pressstart2p)
+is bundled under the SIL Open Font License (see `Assets/Fonts/OFL-PressStart2P.txt`).
+
 I can change these settings in the window. If I move an app's volume slider
 myself, VoiceDucker leaves my new choice alone. On a normal exit, it returns
 the sessions it still controls to their previous levels over **2,000 ms**.
+
+VoiceDucker's own audio sessions are filtered by process name. Each stream's
+**Remove** button hides that process from every stream card and excludes it from
+automatic volume lowering. The blacklist is saved immediately and survives
+app and Windows restarts. **Hidden apps** in Advanced options lets me restore
+an app. Sessions already lowered return to their owned previous level using
+the configured fade back; manual mixer overrides are preserved.
 
 See [release and WinGet instructions](docs/RELEASING.md) for packaging and publication.
 
@@ -57,6 +82,13 @@ subject `CN=VibeWare` in `Cert:\CurrentUser\My`:
 ```powershell
 pwsh -NoProfile -File .\scripts\package-msix.ps1 -Architecture x64 -CertificateThumbprint <thumbprint> -Install
 ```
+
+The installed MSIX keeps the Start menu identity
+`VibeWare.VoiceDucker_af9ft7172qtwj!App` across updates and registers the
+`VoiceDucker.exe` execution alias. Use the installed Start menu entry or this
+alias to launch the installed app. The portable build uses the stable path
+`artifacts/app/win-x64/VoiceDucker.exe`; temporary validation builds stay under
+`artifacts` and do not create launch shortcuts.
 
 ---
 
