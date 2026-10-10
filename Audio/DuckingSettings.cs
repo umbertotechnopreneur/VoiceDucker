@@ -19,9 +19,18 @@ internal sealed record DuckingSettings(
     int ReductionPercent = 90,
     int FadeDownMilliseconds = 300,
     int FadeUpMilliseconds = 30000,
-    bool IncludeOtherSources = false)
+    bool IncludeOtherSources = false,
+    bool ShowVisualizers = true)
 {
+    public string[] BlacklistedProcesses { get; init; } = [];
+
+    public bool IsProcessExcluded(string name) => PlaybackIdentity.IsOwnProcess(name) ||
+        BlacklistedProcesses.Any(hidden => PlaybackIdentity.NormalizeProcessName(hidden).Equals(
+            PlaybackIdentity.NormalizeProcessName(name), StringComparison.OrdinalIgnoreCase));
+
     public bool IsValid => ReductionPercent is >= 0 and <= 100 &&
                            FadeDownMilliseconds is >= 0 and <= 5000 &&
-                           FadeUpMilliseconds is >= 0 and <= 30000;
+                           FadeUpMilliseconds is >= 0 and <= 30000 &&
+                           BlacklistedProcesses is not null &&
+                           BlacklistedProcesses.All(name => !string.IsNullOrWhiteSpace(name));
 }

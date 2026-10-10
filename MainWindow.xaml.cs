@@ -12,6 +12,7 @@
  * License: MIT
  * VBWR E */
 
+using System.Globalization;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -19,6 +20,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
 using VoiceDucker.Audio;
+using VoiceDucker.Visuals;
 using Windows.Foundation;
 using Windows.Graphics;
 using Windows.Storage.Streams;
@@ -42,6 +44,8 @@ public sealed partial class MainWindow : Window
     private PlaybackMonitor? _playbackMonitor;
     private DispatcherTimer? _streamTimer;
     private bool _refreshingStreamRows;
+    private readonly AppAudioVisualizers _audioVisualizers = new();
+    private DispatcherTimer? _visualizerTimer;
 
     public MainWindow()
     {
@@ -80,6 +84,8 @@ public sealed partial class MainWindow : Window
         FadeDownBox.Value = _settings.FadeDownMilliseconds;
         FadeUpBox.Value = _settings.FadeUpMilliseconds;
         OtherSourcesCheckBox.IsChecked = _settings.IncludeOtherSources;
+        ShowVisualizersCheckBox.IsChecked = _settings.ShowVisualizers;
+        RefreshHiddenApps();
         _settingsReady = true;
         FeedbackText.Text = settingsError ?? string.Empty;
 
@@ -87,6 +93,7 @@ public sealed partial class MainWindow : Window
 
         _engine.StatusChanged += OnStatusChanged;
         AppWindow.Closing += OnWindowClosing;
+        AppWindow.Changed += OnAppWindowChanged;
         RootPanel.Loaded += OnRootLoaded;
         Closed += OnClosed;
     }
@@ -102,6 +109,9 @@ public sealed partial class MainWindow : Window
             _streamTimer.Tick += (_, _) => RefreshStreamRows();
             RefreshStreamRows();
             _streamTimer.Start();
+            _visualizerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
+            _visualizerTimer.Tick += (_, _) => RefreshVisualizers();
+            SynchronizeVisualizers();
         }
         catch (Exception exception)
         {
@@ -180,21 +190,69 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var values = new[] { ReductionBox.Value, FadeDownBox.Value, FadeUpBox.Value };
-        if (values.Any(value => !double.IsFinite(value) || value != Math.Round(value)))
+        ApplyNumericSetting(sender, args.NewValue);
+    }
+
+    private void SettingBox_Loaded(object sender, RoutedEventArgs args)
+    {
+        var numberBox = (NumberBox)sender;
+        numberBox.ApplyTemplate();
+        AttachTextChanged(numberBox, numberBox);
+    }
+
+    private void AttachTextChanged(NumberBox numberBox, DependencyObject element)
+    {
+        if (element is TextBox input)
+        {
+            input.Tag = numberBox;
+            input.TextChanged -= SettingText_TextChanged;
+            input.TextChanged += SettingText_TextChanged;
+            return;
+        }
+
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(element); index++)
+        {
+            AttachTextChanged(numberBox, VisualTreeHelper.GetChild(element, index));
+        }
+    }
+
+    private void SettingText_TextChanged(object sender, TextChangedEventArgs args)
+    {
+        if (!_settingsReady || sender is not TextBox input || input.Tag is not NumberBox numberBox)
+        {
+            return;
+        }
+
+        // NumberBox.Value changes only on commit; save valid edits before focus leaves the field.
+        if (!double.TryParse(input.Text, NumberStyles.Float | NumberStyles.AllowThousands,
+                CultureInfo.CurrentCulture, out var value))
         {
             FeedbackText.Text = "Enter whole numbers within each setting's range.";
             return;
         }
 
-        var next = new DuckingSettings((int)values[0], (int)values[1], (int)values[2],
-            _settings.IncludeOtherSources);
-        if (!next.IsValid)
+        ApplyNumericSetting(numberBox, value);
+    }
+
+    private void ApplyNumericSetting(NumberBox sender, double value)
+    {
+        if (!double.IsFinite(value) || value != Math.Round(value))
+        {
+            FeedbackText.Text = "Enter whole numbers within each setting's range.";
+            return;
+        }
+
+        if (value < sender.Minimum || value > sender.Maximum)
         {
             FeedbackText.Text = "Reduction: 0–100%; fade down: 0–5000 ms; fade back: 0–30000 ms.";
             return;
         }
 
+        var next = sender == ReductionBox
+            ? _settings with { ReductionPercent = (int)value }
+            : sender == FadeDownBox
+                ? _settings with { FadeDownMilliseconds = (int)value }
+                : _settings with { FadeUpMilliseconds = (int)value };
         _settings = next;
         _engine.UpdateSettings(next);
         SaveSettings();
@@ -223,6 +281,24 @@ public sealed partial class MainWindow : Window
         {
             FeedbackText.Text = $"Settings are active but could not be saved: {exception.Message}";
         }
+    }
+
+    private void ShowVisualizersCheckBox_Click(object sender, RoutedEventArgs args)
+    {
+        if (!_settingsReady)
+        {
+            return;
+        }
+
+        _settings = _settings with { ShowVisualizers = ShowVisualizersCheckBox.IsChecked == true };
+        _engine.UpdateSettings(_settings);
+        foreach (var row in _streamRows.Values)
+        {
+            row.Visualizer.Visibility = _settings.ShowVisualizers ? Visibility.Visible : Visibility.Collapsed;
+        }
+        SynchronizeVisualizers();
+        SaveSettings();
+        WindowContentSizing.Fit(this, RootPanel, 520, preservePosition: true);
     }
 
     private async void StartupCheckBox_Click(object sender, RoutedEventArgs args)
@@ -299,7 +375,8 @@ public sealed partial class MainWindow : Window
         IReadOnlyList<PlaybackStream> streams;
         try
         {
-            streams = _playbackMonitor.Read();
+            streams = _playbackMonitor.Read()
+                .Where(stream => !_settings.IsProcessExcluded(stream.Name)).ToArray();
         }
         catch (Exception exception)
         {
@@ -331,7 +408,7 @@ public sealed partial class MainWindow : Window
                     layoutChanged = true;
                 }
 
-                row.Meter.Value = Math.Clamp(stream.Peak * 100, 0, 100);
+                row.Muted = stream.Muted;
                 row.Slider.IsEnabled = !stream.Muted;
                 if (!row.Interacting && row.Slider.FocusState == FocusState.Unfocused)
                 {
@@ -348,10 +425,32 @@ public sealed partial class MainWindow : Window
         }
 
         NoStreamsText.Visibility = streams.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        SynchronizeVisualizers();
         if (layoutChanged)
         {
             WindowContentSizing.Fit(this, RootPanel, 520, preservePosition: true);
         }
+    }
+
+    private void SynchronizeVisualizers()
+    {
+        var visible = _settings.ShowVisualizers && AppWindow.IsVisible &&
+                      AppWindow.Presenter is not OverlappedPresenter { State: OverlappedPresenterState.Minimized };
+        _audioVisualizers.Synchronize(visible ? _streamRows.Values.Select(row => row.ProcessId) : []);
+        if (visible && _streamRows.Count > 0) _visualizerTimer?.Start();
+        else _visualizerTimer?.Stop();
+    }
+
+    private void OnAppWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
+    {
+        if (args.DidVisibilityChange || args.DidSizeChange || args.DidPresenterChange)
+            SynchronizeVisualizers();
+    }
+
+    private void RefreshVisualizers()
+    {
+        foreach (var row in _streamRows.Values)
+            row.Visualizer.Update(_audioVisualizers.GetFrame(row.ProcessId), row.Muted);
     }
 
     private async Task LoadStreamIconAsync(int processId, string key, Image icon)
@@ -390,30 +489,52 @@ public sealed partial class MainWindow : Window
         var name = new TextBlock
         {
             Text = stream.IsSpotify ? "SPOTIFY" : stream.Name.ToUpperInvariant(),
-            FontFamily = new FontFamily("Consolas"),
-            FontSize = 12
+            FontFamily = CassetteVisualizer.RetroFont,
+            FontSize = 10,
+            Foreground = CassetteVisualizer.Brush(0xE8E2CE),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
         };
         var percentage = new TextBlock
         {
             Text = $"{Math.Round(stream.Volume * 100):0}%",
-            FontFamily = new FontFamily("Consolas"),
-            FontSize = 12,
+            FontFamily = CassetteVisualizer.RetroFont,
+            FontSize = 10,
+            Foreground = CassetteVisualizer.Brush(0xE8E2CE),
+            VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Right
         };
-        var title = new Grid();
+        var title = new Grid { ColumnSpacing = 8 };
         title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
         title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(name, 1);
         Grid.SetColumn(percentage, 2);
         title.Children.Add(name);
         title.Children.Add(percentage);
+        var remove = new Button
+        {
+            Content = "Remove", FontFamily = CassetteVisualizer.RetroFont, FontSize = 7,
+            Padding = new Thickness(8, 5, 8, 5), MinWidth = 0, MinHeight = 24,
+            Foreground = CassetteVisualizer.Brush(0xE8E2CE),
+            Background = CassetteVisualizer.Brush(0x171A17),
+            BorderBrush = CassetteVisualizer.Brush(0x686B60),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(remove, $"Remove {stream.Name}");
+        ToolTipService.SetToolTip(remove,
+            "Hide this app and exclude it from lowering. Restore it under Hidden apps.");
+        remove.Click += (_, _) => SetProcessHidden(stream.Name, true);
+        Grid.SetColumn(remove, 3);
+        title.Children.Add(remove);
         var icon = new Image { Width = 24, Height = 24, Stretch = Stretch.Uniform };
         var iconPlaceholder = new FontIcon
         {
             Glyph = "\uE80A",
             FontFamily = new FontFamily("Segoe Fluent Icons"),
             FontSize = 16,
+            Foreground = CassetteVisualizer.Brush(0xE8E2CE),
             Opacity = 0.55
         };
         var iconLayer = new Grid { Width = 24, Height = 24, Margin = new Thickness(0, 0, 8, 0) };
@@ -429,30 +550,31 @@ public sealed partial class MainWindow : Window
             Value = Math.Clamp(stream.Volume * 100, 0, 100),
             IsEnabled = !stream.Muted
         };
-        var meter = new ProgressBar
+        slider.Resources["SliderTrackFill"] = CassetteVisualizer.Brush(0x111411);
+        slider.Resources["SliderTrackValueFill"] = CassetteVisualizer.Brush(0xD3CEBA);
+        slider.Resources["SliderThumbBackground"] = CassetteVisualizer.Brush(0xE8E2CE);
+        slider.Resources["SliderThumbBackgroundPointerOver"] = CassetteVisualizer.Brush(0xFFF3D0);
+        slider.Resources["SliderThumbBackgroundPressed"] = CassetteVisualizer.Brush(0xC6B98E);
+        var visualizer = new CassetteVisualizer
         {
-            Minimum = 0,
-            Maximum = 100,
-            Height = 5,
-            Value = Math.Clamp(stream.Peak * 100, 0, 100),
-            Foreground = new SolidColorBrush(stream.IsSpotify
-                ? Color.FromArgb(255, 246, 162, 76)
-                : Color.FromArgb(255, 109, 171, 202))
+            Visibility = _settings.ShowVisualizers ? Visibility.Visible : Visibility.Collapsed
         };
-        var panel = new StackPanel { Spacing = 4 };
+        ToolTipService.SetToolTip(visualizer,
+            "Stereo VU: 0 = -18 dBFS RMS. Spectrum: 40 Hz to 16 kHz. App process audio across outputs.");
+        var panel = new StackPanel { Spacing = 6 };
         panel.Children.Add(title);
         panel.Children.Add(slider);
-        panel.Children.Add(meter);
+        panel.Children.Add(visualizer);
         var card = new Border
         {
             Child = panel,
-            Padding = new Thickness(10),
+            Padding = new Thickness(12),
             CornerRadius = new CornerRadius(4),
             BorderThickness = new Thickness(1),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(150, 69, 88, 106)),
-            Background = new SolidColorBrush(Color.FromArgb(85, 13, 28, 44))
+            BorderBrush = CassetteVisualizer.Brush(0x4B4E48),
+            Background = CassetteVisualizer.Brush(0x272B28)
         };
-        var row = new StreamRow(card, slider, meter, percentage, icon);
+        var row = new StreamRow(card, slider, visualizer, percentage, icon, stream.ProcessId) { Muted = stream.Muted };
         slider.PointerPressed += (_, _) => row.Interacting = true;
         slider.PointerReleased += (_, _) => row.Interacting = false;
         slider.PointerCanceled += (_, _) => row.Interacting = false;
@@ -479,15 +601,56 @@ public sealed partial class MainWindow : Window
         return row;
     }
 
-    private sealed class StreamRow(Border card, Slider slider, ProgressBar meter,
-        TextBlock percentage, Image icon)
+    private void SetProcessHidden(string processName, bool hidden)
+    {
+        var normalized = PlaybackIdentity.NormalizeProcessName(processName);
+        var names = _settings.BlacklistedProcesses.Where(name =>
+            !PlaybackIdentity.NormalizeProcessName(name).Equals(normalized, StringComparison.OrdinalIgnoreCase));
+        _settings = _settings with
+        {
+            BlacklistedProcesses = (hidden ? names.Append(normalized) : names)
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
+        };
+        _engine.UpdateSettings(_settings);
+        SaveSettings();
+        RefreshHiddenApps();
+        RefreshStreamRows();
+    }
+
+    private void RefreshHiddenApps()
+    {
+        HiddenAppsButton.Visibility = _settings.BlacklistedProcesses.Length > 0
+            ? Visibility.Visible : Visibility.Collapsed;
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Hidden apps are excluded from the list and automatic volume lowering.",
+            TextWrapping = TextWrapping.Wrap, MaxWidth = 280
+        });
+        foreach (var name in _settings.BlacklistedProcesses.Order(StringComparer.OrdinalIgnoreCase))
+        {
+            var restore = new Button { Content = $"Restore {name}" };
+            restore.Click += (_, _) =>
+            {
+                HiddenAppsButton.Flyout.Hide();
+                SetProcessHidden(name, false);
+            };
+            panel.Children.Add(restore);
+        }
+        HiddenAppsButton.Flyout = new Flyout { Content = panel };
+    }
+
+    private sealed class StreamRow(Border card, Slider slider, CassetteVisualizer visualizer,
+        TextBlock percentage, Image icon, int processId)
     {
         public Border Card { get; } = card;
         public Slider Slider { get; } = slider;
-        public ProgressBar Meter { get; } = meter;
+        public CassetteVisualizer Visualizer { get; } = visualizer;
         public TextBlock Percentage { get; } = percentage;
         public Image Icon { get; } = icon;
         public bool Interacting { get; set; }
+        public int ProcessId { get; } = processId;
+        public bool Muted { get; set; }
     }
 
     private void SetMicLedActive(bool active)
@@ -611,9 +774,12 @@ public sealed partial class MainWindow : Window
         _micLedPulse.Stop();
         _mixerPulse.Stop();
         _streamTimer?.Stop();
+        _visualizerTimer?.Stop();
+        _audioVisualizers.Dispose();
         _playbackMonitor?.Dispose();
         _engine.StatusChanged -= OnStatusChanged;
         AppWindow.Closing -= OnWindowClosing;
+        AppWindow.Changed -= OnAppWindowChanged;
         _tray?.Dispose();
         _aboutWindow?.Close();
         _closeChoice?.Close();

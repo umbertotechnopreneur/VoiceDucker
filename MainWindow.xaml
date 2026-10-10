@@ -87,6 +87,15 @@ VBWR E -->
                 </StackPanel>
             </Button>
 
+            <StackPanel Spacing="8">
+                <TextBlock Text="ACTIVE AUDIO STREAMS" FontFamily="Consolas" FontWeight="SemiBold" />
+                <TextBlock Text="Spotify is lowered by default. Sliders control each app's Windows audio session."
+                           TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
+                <StackPanel x:Name="StreamRows" Spacing="8" />
+                <TextBlock x:Name="NoStreamsText" Text="No apps playing audio right now."
+                           FontSize="12" Opacity="0.68" />
+            </StackPanel>
+
             <Expander x:Name="AdvancedOptionsExpander" Header="Advanced options"
                       IsExpanded="False" HorizontalAlignment="Stretch"
                       HorizontalContentAlignment="Stretch"
@@ -107,15 +116,15 @@ VBWR E -->
                             <TextBlock Text="Reduce volume by (%)" VerticalAlignment="Center" />
                             <NumberBox x:Name="ReductionBox" Grid.Column="1" Minimum="0" Maximum="100"
                                        SmallChange="1" SpinButtonPlacementMode="Compact"
-                                       ValueChanged="SettingBox_ValueChanged" />
+                                       Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged" />
                             <TextBlock Grid.Row="1" Text="Fade down (ms)" VerticalAlignment="Center" />
                             <NumberBox x:Name="FadeDownBox" Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="5000"
                                        SmallChange="100" SpinButtonPlacementMode="Compact"
-                                       ValueChanged="SettingBox_ValueChanged" />
+                                       Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged" />
                             <TextBlock Grid.Row="2" Text="Fade back (ms)" VerticalAlignment="Center" />
                             <NumberBox x:Name="FadeUpBox" Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="30000"
                                        SmallChange="100" SpinButtonPlacementMode="Compact"
-                                       ValueChanged="SettingBox_ValueChanged" />
+                                       Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged" />
                         </Grid>
                         <TextBlock Text="Fade back is the time to return to the previous volume (for example, 10% to 100%)."
                                    TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
@@ -124,14 +133,11 @@ VBWR E -->
                     </StackPanel>
 
                     <StackPanel Spacing="8">
-                        <TextBlock Text="ACTIVE AUDIO STREAMS" FontFamily="Consolas" FontWeight="SemiBold" />
                         <CheckBox x:Name="OtherSourcesCheckBox" Content="Also lower other apps"
                                   Click="OtherSourcesCheckBox_Click" />
-                        <TextBlock Text="Spotify is lowered by default. Sliders control each app's Windows audio session."
-                                   TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
-                        <StackPanel x:Name="StreamRows" Spacing="8" />
-                        <TextBlock x:Name="NoStreamsText" Text="No apps playing audio right now."
-                                   FontSize="12" Opacity="0.68" />
+                        <CheckBox x:Name="ShowVisualizersCheckBox" Content="Show visualizers"
+                                  Click="ShowVisualizersCheckBox_Click" />
+                        <Button x:Name="HiddenAppsButton" Content="Hidden apps" Visibility="Collapsed" />
                     </StackPanel>
                 </StackPanel>
             </Expander>

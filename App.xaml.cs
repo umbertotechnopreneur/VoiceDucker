@@ -23,6 +23,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using Microsoft.UI.Xaml.Shapes;
+using System.Runtime.InteropServices;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -57,10 +58,28 @@ public partial class App : Application
         {
             _instanceMutex.Dispose();
             _instanceMutex = null;
+            var existingWindow = FindWindow(null, "VoiceDucker");
+            if (existingWindow != IntPtr.Zero)
+            {
+                ShowWindow(existingWindow, 9); // SW_RESTORE also shows a window hidden in the tray.
+                SetForegroundWindow(existingWindow);
+            }
+            Exit();
             return;
         }
 
         _window = new MainWindow();
         _window.Activate();
     }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr FindWindow(string? className, string windowName);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowWindow(IntPtr window, int command);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(IntPtr window);
 }

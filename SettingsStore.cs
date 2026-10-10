@@ -26,17 +26,19 @@ internal static class SettingsStore
 
     public static bool HasSavedSettings => File.Exists(SettingsPath);
 
-    public static DuckingSettings Load(out string? error)
+    public static DuckingSettings Load(out string? error) => Load(SettingsPath, out error);
+
+    internal static DuckingSettings Load(string settingsPath, out string? error)
     {
         error = null;
-        if (!File.Exists(SettingsPath))
+        if (!File.Exists(settingsPath))
         {
             return new DuckingSettings();
         }
 
         try
         {
-            var settings = JsonSerializer.Deserialize<DuckingSettings>(File.ReadAllText(SettingsPath));
+            var settings = JsonSerializer.Deserialize<DuckingSettings>(File.ReadAllText(settingsPath));
             if (settings is null || !settings.IsValid)
             {
                 throw new InvalidDataException("Settings contain a value outside its allowed range.");
@@ -51,20 +53,26 @@ internal static class SettingsStore
         }
     }
 
-    public static void Save(DuckingSettings settings)
+    public static void Save(DuckingSettings settings) => Save(settings, SettingsPath);
+
+    internal static void Save(DuckingSettings settings, string settingsPath)
     {
         if (!settings.IsValid)
         {
             throw new ArgumentOutOfRangeException(nameof(settings));
         }
 
-        var directory = Path.GetDirectoryName(SettingsPath)!;
+        var directory = Path.GetDirectoryName(settingsPath)!;
         Directory.CreateDirectory(directory);
-        var temporaryPath = SettingsPath + ".tmp";
+        var temporaryPath = settingsPath + ".tmp";
         try
         {
-            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(settings));
-            File.Move(temporaryPath, SettingsPath, true);
+            using (var stream = new FileStream(temporaryPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                JsonSerializer.Serialize(stream, settings);
+                stream.Flush(flushToDisk: true);
+            }
+            File.Move(temporaryPath, settingsPath, true);
         }
         finally
         {

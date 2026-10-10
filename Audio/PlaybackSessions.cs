@@ -48,7 +48,9 @@ internal sealed class PlaybackSessions : IDisposable
                     var key = endpoint.ID + ":" + session.GetSessionInstanceIdentifier;
                     seen.Add(key);
                     var volume = session.SimpleAudioVolume;
-                    var eligible = settings.IncludeOtherSources || IsSpotify(session);
+                    var processName = PlaybackIdentity.ProcessName((int)session.GetProcessID);
+                    var eligible = !settings.IsProcessExcluded(processName) &&
+                                   (settings.IncludeOtherSources || IsSpotify(session));
 
                     if (_saved.TryGetValue(key, out var saved))
                     {

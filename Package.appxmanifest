@@ -60,6 +60,11 @@ VBWR E -->
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
       <Extensions>
+        <uap5:Extension Category="windows.appExecutionAlias" Executable="VoiceDucker.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap5:AppExecutionAlias uap10:Subsystem="windows">
+            <uap5:ExecutionAlias Alias="VoiceDucker.exe" />
+          </uap5:AppExecutionAlias>
+        </uap5:Extension>
         <uap5:Extension Category="windows.startupTask" Executable="VoiceDucker.exe" EntryPoint="Windows.FullTrustApplication">
           <uap5:StartupTask TaskId="VoiceDuckerStartup" Enabled="false" DisplayName="VoiceDucker" />
         </uap5:Extension>

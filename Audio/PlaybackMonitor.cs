@@ -50,7 +50,7 @@ internal sealed class PlaybackMonitor : IDisposable
                         }
 
                         var name = PlaybackIdentity.ProcessName(processId);
-                        if (string.IsNullOrEmpty(name))
+                        if (string.IsNullOrEmpty(name) || PlaybackIdentity.IsOwnProcess(name))
                         {
                             continue;
                         }
