@@ -8,6 +8,8 @@ I talk to AI while Spotify keeps me company. Windows' **Communications** setting
 
 I press **Enable** when I want it to listen to my microphone. When I speak, it lowers Spotify; I can choose other playing apps too. When I stop, it fades them back to the volume I chose. My voice stays in memory: no recordings, transcription, or uploads.
 
+VoiceDucker is a **native Windows desktop app built with WinUI 3**, the same UI framework we use for our newer Windows apps. We pay close attention to **RAM usage, performance, and disk footprint**. There is always room to improve, and we keep working on optimizations.
+
 Created by [Umberto Giacobbi](https://umbertogiacobbi.biz), shared under the [MIT license](LICENSE).
 
 ## Download and play
@@ -21,9 +23,17 @@ On **Windows 11**, extract the whole ZIP into a folder you can write to, then op
 
 The ZIP is portable and unsigned. Windows may show a security prompt. There is no MSIX installation or signing certificate to import for this download.
 
-## Screenshot
+## See it in action
 
-<img src="docs/screenshots/main-window.png" alt="VoiceDucker with the microphone off and advanced options collapsed" width="480">
+<p align="center">
+  <a href="docs/screenshots/screenshot-board.png">
+    <img src="docs/screenshots/screenshot-board.png" alt="VoiceDucker native Windows UI and advanced settings: live green microphone level, sensitivity, microphone selection, and pause and fade controls" width="1100">
+  </a>
+</p>
+
+<p align="center">
+  New UI and settings · <a href="docs/screenshots/voice-ducker-live.png">Open UI screenshot</a> · <a href="docs/screenshots/voice-ducker-settings.png">Open settings screenshot</a>
+</p>
 
 ## My defaults
 
