@@ -51,7 +51,7 @@ public sealed partial class MainWindow : Window
     private bool _footerPointerOver;
     private readonly StoreLicenseService _licensing;
     private readonly DispatcherTimer _licenseTimer = new() { Interval = TimeSpan.FromSeconds(1) };
-    private bool _licensePurchasePending;
+    private bool _trialExpiryShown;
 
     public MainWindow()
     {
@@ -99,7 +99,7 @@ public sealed partial class MainWindow : Window
         _engine = new DuckingEngine(_settings);
         _licensing = new StoreLicenseService(this);
         _licensing.Changed += OnLicenseChanged;
-        _licenseTimer.Tick += (_, _) => _licensing.CheckExpiration();
+        _licenseTimer.Tick += (_, _) => { _licensing.CheckExpiration(); UpdateLicenseTitle(); };
         ReductionBox.Value = _settings.ReductionPercent;
         FadeDownBox.Value = _settings.FadeDownMilliseconds;
         FadeUpBox.Value = _settings.FadeUpMilliseconds;
@@ -133,7 +133,6 @@ public sealed partial class MainWindow : Window
         if (_licensing.IsStoreEdition)
         {
             await UpdateLicenseUiAsync();
-            _ = _licensing.LoadPriceAsync();
             _ = _licensing.RefreshAsync();
         }
         try
@@ -805,7 +804,10 @@ public sealed partial class MainWindow : Window
     {
         if (_licensing.State == LicenseState.Trial) _licenseTimer.Start();
         else _licenseTimer.Stop();
-        LicensePanel.Visibility = _licensing.IsStoreEdition && _licensing.State != LicenseState.Full
+        UpdateLicenseTitle();
+        FooterPurchaseButton.Visibility = _licensing.IsStoreEdition && _licensing.State != LicenseState.Full
+            ? Visibility.Visible : Visibility.Collapsed;
+        LicensePanel.Visibility = _licensing.IsStoreEdition && _licensing.State is LicenseState.Checking or LicenseState.Unavailable
             ? Visibility.Visible : Visibility.Collapsed;
         LicenseStatusText.Text = _licensing.State switch
         {
@@ -815,8 +817,6 @@ public sealed partial class MainWindow : Window
             LicenseState.Unavailable => "Your Microsoft Store license could not be checked. Please retry.",
             _ => string.Empty
         };
-        BuyLicenseButton.Content = string.IsNullOrWhiteSpace(_licensing.FormattedPrice)
-            ? "Buy in Microsoft Store" : $"Buy — {_licensing.FormattedPrice}";
         if (!_licensing.CanUseApp && _engine.IsRunning)
         {
             try { await Task.Run(_engine.Stop); }
@@ -824,15 +824,37 @@ public sealed partial class MainWindow : Window
         }
         if (RootPanel.IsLoaded)
             WindowContentSizing.Fit(this, RootPanel, 520, preservePosition: true);
+        if (_licensing.State == LicenseState.Expired && _licensing.IsTrialLicense && !_trialExpiryShown)
+        {
+            _trialExpiryShown = true;
+            RevealFooter();
+            try
+            {
+                AppWindow.Show();
+                Activate();
+                var dialog = new ContentDialog
+                {
+                    XamlRoot = RootPanel.XamlRoot,
+                    Title = "Your free trial has ended",
+                    Content = "Thank you for trying VoiceDucker. Your 30-day free trial has ended. Visit Microsoft Store to purchase your copy of the app. You can also visit GitHub to study, copy and adapt the source under its MIT license.",
+                    PrimaryButtonText = "Open Microsoft Store",
+                    SecondaryButtonText = "View source on GitHub",
+                    CloseButtonText = "Close"
+                };
+                var result = await dialog.ShowAsync();
+                if (result == ContentDialogResult.Primary)
+                    await Windows.System.Launcher.LaunchUriAsync(new Uri($"ms-windows-store://pdp/?productid={StoreLicenseService.StoreId}"));
+                else if (result == ContentDialogResult.Secondary)
+                    await Windows.System.Launcher.LaunchUriAsync(new Uri("https://github.com/umbertotechnopreneur/VoiceDucker"));
+            }
+            catch (Exception) { FeedbackText.Text = "Your trial has ended. Use Purchase to open Microsoft Store, or visit VoiceDucker on GitHub."; }
+        }
     }
 
-    private async void BuyLicense_Click(object sender, RoutedEventArgs args)
+    private void UpdateLicenseTitle()
     {
-        if (_licensePurchasePending) return;
-        _licensePurchasePending = true;
-        BuyLicenseButton.IsEnabled = false;
-        try { FeedbackText.Text = await _licensing.PurchaseAsync() ?? string.Empty; }
-        finally { _licensePurchasePending = false; BuyLicenseButton.IsEnabled = true; }
+        var title = LicensePolicy.WindowTitle("VoiceDucker", _licensing.State, _licensing.Expires, DateTimeOffset.UtcNow);
+        if (Title != title) Title = title;
     }
 
     private async void CheckLicense_Click(object sender, RoutedEventArgs args) => await _licensing.RefreshAsync();

@@ -63,7 +63,9 @@ WinUI window handle, and the app's Store ID `9P2F2FCRHS85`. Configure a time-lim
 30-day trial and the $1.99 base US one-time purchase price in Partner Center.
 The app uses Store-provided active/trial/expiration data and the Windows license
 cache offline; it does not persist its own trial start or reset trial on reinstall.
-Purchase dialogs are user-initiated and use Store-localized pricing. Trial expiry
+The footer's Purchase link opens the Store product page, which displays market
+pricing. The title shows days remaining; trial expiry displays a one-time dialog
+with Store and GitHub source links. Trial expiry
 and Store license changes stop microphone capture and restore owned audio.
 
 License policy boundary tests run with the existing settings test script. Actual

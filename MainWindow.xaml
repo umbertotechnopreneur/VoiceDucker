@@ -43,7 +43,6 @@ VBWR E -->
                 <StackPanel Spacing="8">
                     <TextBlock x:Name="LicenseStatusText" TextWrapping="Wrap" FontSize="12" />
                     <StackPanel Orientation="Horizontal" Spacing="12">
-                        <Button x:Name="BuyLicenseButton" Content="Buy in Microsoft Store" Click="BuyLicense_Click" />
                         <Button Content="Check license" Click="CheckLicense_Click" />
                     </StackPanel>
                 </StackPanel>
@@ -241,6 +240,9 @@ VBWR E -->
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
+                <HyperlinkButton x:Name="FooterPurchaseButton" Content="Purchase" Padding="0"
+                                 Visibility="Collapsed" VerticalAlignment="Center" FontSize="12"
+                                 NavigateUri="ms-windows-store://pdp/?productid=9P2F2FCRHS85" />
                 <StackPanel Grid.Column="1" HorizontalAlignment="Right"
                             VerticalAlignment="Center" Orientation="Horizontal" Spacing="6">
                     <TextBlock Text="This is VibeWare ·" VerticalAlignment="Center" FontSize="12"

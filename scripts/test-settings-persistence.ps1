@@ -62,6 +62,14 @@ void Check(bool condition, string message)
 
 var licenseNow = new DateTimeOffset(2026, 10, 12, 0, 0, 0, TimeSpan.Zero);
 var trialEnd = licenseNow.AddDays(30);
+Check(LicensePolicy.WindowTitle("VoiceDucker", LicenseState.Trial, licenseNow.AddDays(1), licenseNow) ==
+    "VoiceDucker - Free Trial, 1 day remaining" &&
+    LicensePolicy.WindowTitle("VoiceDucker", LicenseState.Trial, licenseNow.AddDays(2), licenseNow) ==
+    "VoiceDucker - Free Trial, 2 days remaining" &&
+    LicensePolicy.WindowTitle("VoiceDucker", LicenseState.Expired, trialEnd, trialEnd) ==
+    "VoiceDucker - Trial Expired" &&
+    LicensePolicy.WindowTitle("VoiceDucker", LicenseState.Full, trialEnd, licenseNow) == "VoiceDucker",
+    "Trial title or full-license title is incorrect.");
 Check(LicensePolicy.Evaluate(true, true, trialEnd, licenseNow) == LicenseState.Trial,
     "An active unexpired trial was rejected.");
 Check(LicensePolicy.Evaluate(true, true, trialEnd, trialEnd) == LicenseState.Expired &&

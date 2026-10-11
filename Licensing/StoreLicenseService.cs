@@ -21,6 +21,7 @@ internal sealed class StoreLicenseService : IDisposable
 
     internal LicenseState State { get; private set; }
     internal DateTimeOffset Expires { get; private set; }
+    internal bool IsTrialLicense { get; private set; }
     internal string? FormattedPrice { get; private set; }
     internal bool IsStoreEdition { get; }
     internal bool CanUseApp => LicensePolicy.CanUse(State, Expires, DateTimeOffset.UtcNow);
@@ -53,6 +54,7 @@ internal sealed class StoreLicenseService : IDisposable
             // Windows supplies the cached Store license offline. No custom trial clock or license file.
             var license = await _context.GetAppLicenseAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(15));
             Expires = license.ExpirationDate;
+            IsTrialLicense = license.IsTrial;
             State = LicensePolicy.Evaluate(license.IsActive, license.IsTrial, Expires, DateTimeOffset.UtcNow);
         }
         catch (Exception) { State = LicenseState.Unavailable; }
