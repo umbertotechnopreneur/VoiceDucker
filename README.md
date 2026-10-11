@@ -130,3 +130,10 @@ To learn what VibeWare means and why I created it, read the [VibeWare manifesto]
 [Terms](https://umbertogiacobbi.biz/terms/) · [Privacy](https://umbertogiacobbi.biz/privacy/)
 
 *You are welcome to explore, adapt and reuse the open-source VibeWare materials under the project license — my contribution to the developer community.*
+
+The Microsoft Store edition uses the Store-managed 30-day trial and a one-time
+purchase at the price shown for your market (base US price: $1.99). The trial
+does not automatically charge you. Store license status and expiration govern
+access; the app stops monitoring and restores audio it still owns if access ends.
+Local development packages and the MIT portable distribution do not use Store
+licensing. This does not change the source license.

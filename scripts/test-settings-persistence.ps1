@@ -30,6 +30,7 @@ $sourceRoot = [System.Security.SecurityElement]::Escape($projectRoot)
     <Compile Include="$sourceRoot\Audio\DuckingSettings.cs" Link="DuckingSettings.cs" />
     <Compile Include="$sourceRoot\Audio\PlaybackIdentity.cs" Link="PlaybackIdentity.cs" />
     <Compile Include="$sourceRoot\Audio\VoiceGate.cs" Link="VoiceGate.cs" />
+    <Compile Include="$sourceRoot\Licensing\LicensePolicy.cs" Link="LicensePolicy.cs" />
   </ItemGroup>
 </Project>
 "@ | Set-Content -LiteralPath (Join-Path $testRoot 'PersistenceTests.csproj') -Encoding utf8
@@ -38,6 +39,7 @@ $sourceRoot = [System.Security.SecurityElement]::Escape($projectRoot)
 using System.Diagnostics;
 using VoiceDucker;
 using VoiceDucker.Audio;
+using VoiceDucker.Licensing;
 
 var path = Path.Combine(AppContext.BaseDirectory, "isolated-settings", args[1], "settings.json");
 var expected = new DuckingSettings(73, 450, 12300, true)
@@ -57,6 +59,28 @@ void Check(bool condition, string message)
 {
     if (!condition) throw new InvalidOperationException(message);
 }
+
+var licenseNow = new DateTimeOffset(2026, 10, 12, 0, 0, 0, TimeSpan.Zero);
+var trialEnd = licenseNow.AddDays(30);
+Check(LicensePolicy.Evaluate(true, true, trialEnd, licenseNow) == LicenseState.Trial,
+    "An active unexpired trial was rejected.");
+Check(LicensePolicy.Evaluate(true, true, trialEnd, trialEnd) == LicenseState.Expired &&
+    !LicensePolicy.CanUse(LicenseState.Trial, trialEnd, trialEnd),
+    "The trial remained usable at its exact expiration boundary.");
+Check(LicensePolicy.Evaluate(false, false, trialEnd, licenseNow) == LicenseState.Expired &&
+    LicensePolicy.Evaluate(false, true, trialEnd, licenseNow) == LicenseState.Expired,
+    "Inactive licenses were granted access.");
+Check(LicensePolicy.Evaluate(true, false, licenseNow.AddDays(-1), licenseNow) == LicenseState.Full &&
+    LicensePolicy.CanUse(LicenseState.Full, licenseNow.AddDays(-1), licenseNow),
+    "A full license was incorrectly constrained by a trial expiration.");
+Check(!LicensePolicy.CanUse(LicenseState.Checking, trialEnd, licenseNow) &&
+    !LicensePolicy.CanUse(LicenseState.Unavailable, trialEnd, licenseNow) &&
+    !LicensePolicy.CanUse(LicenseState.Expired, trialEnd, licenseNow) &&
+    LicensePolicy.CanUse(LicenseState.Unrestricted, default, licenseNow),
+    "Unverified Store states or local development licensing were handled incorrectly.");
+Check(LicensePolicy.CanUse(LicenseState.Trial, trialEnd, trialEnd.AddTicks(-1)) &&
+    !LicensePolicy.CanUse(LicenseState.Trial, trialEnd, trialEnd.AddTicks(1)),
+    "A running trial failed to enforce the expiration boundary.");
 
 var loaded = SettingsStore.Load(path, out var error);
 bool SameSettings(DuckingSettings left, DuckingSettings right) =>

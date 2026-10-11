@@ -38,6 +38,16 @@ VBWR E -->
                 </StackPanel>
             </StackPanel>
 
+            <Border x:Name="LicensePanel" Visibility="Collapsed" Padding="12" CornerRadius="8"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                <StackPanel Spacing="8">
+                    <TextBlock x:Name="LicenseStatusText" TextWrapping="Wrap" FontSize="12" />
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button x:Name="BuyLicenseButton" Content="Buy in Microsoft Store" Click="BuyLicense_Click" />
+                        <Button Content="Check license" Click="CheckLicense_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
             <Grid ColumnSpacing="14">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="170" />
@@ -223,6 +233,9 @@ VBWR E -->
 
             <TextBlock x:Name="FeedbackText" TextWrapping="Wrap" FontSize="12" />
 
+            <Border Background="Transparent" PointerEntered="Footer_PointerEntered"
+                    PointerExited="Footer_PointerExited" GotFocus="Footer_GotFocus">
+            <StackPanel x:Name="FooterLinks" Spacing="12">
             <Grid ColumnSpacing="16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -251,6 +264,8 @@ VBWR E -->
                 <HyperlinkButton Content="Privacy" NavigateUri="https://umbertogiacobbi.biz/privacy/"
                                  Padding="0" FontSize="12" />
             </StackPanel>
+            </StackPanel>
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </Window>

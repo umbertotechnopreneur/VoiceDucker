@@ -32,7 +32,51 @@ facts. ARM64 runtime behavior needs an ARM64 machine.
 Existing tags and release assets are never replaced by the workflow.
 The release has no telemetry, signing certificate, or public MSIX package.
 
-## WinGet
+## Microsoft Store preparation
+
+The reserved Store identity is in `Properties/StoreIdentity.json`. Build an unsigned
+upload package with `pwsh -NoProfile -File scripts/package-msix.ps1 -Store -Architecture x64`
+(or `ARM64`). The script generates a separate manifest, checks the packaged
+Name, Publisher, PublisherDisplayName, architecture and version, and rejects
+installation or local signing in Store mode. Microsoft signs accepted Store
+packages. The source manifest retains the local test identity for sideload updates.
+
+Before submission, run Windows App Certification Kit and test installation and audio
+behavior on a clean machine. A local signed MSIX requires its test certificate's
+public key to be trusted on the test machine; never distribute its private key.
+The owner manages virtual-machine testing.
+
+Create a submission in Partner Center, then configure Store listings. Export listings
+as CSV UTF-8, preserve the Field/ID/Type columns, and import a folder containing
+the edited CSV and image assets. Localized Store descriptions do not imply that
+the app interface supports those languages; VoiceDucker currently uses English UI.
+Use the generic website Terms and Privacy URLs, with app-specific data handling
+documented here. Follow VibeWare's `templates/APP-PUBLICATION.md` for About and links.
+
+Store screenshots must meet Store-specific image requirements; the README marketing
+board is not the Store screenshot template. Prepare clean UI screenshots and a
+300 × 300 app tile. Optional hero art is 1920 × 1080 or 3840 × 2160 without text
+or application UI. Poster/box art guidance for games is not a requirement for this app.
+
+The Store edition uses `Windows.Services.Store.StoreContext`, initialized with the
+WinUI window handle, and the app's Store ID `9P2F2FCRHS85`. Configure a time-limited
+30-day trial and the $1.99 base US one-time purchase price in Partner Center.
+The app uses Store-provided active/trial/expiration data and the Windows license
+cache offline; it does not persist its own trial start or reset trial on reinstall.
+Purchase dialogs are user-initiated and use Store-localized pricing. Trial expiry
+and Store license changes stop microphone capture and restore owned audio.
+
+License policy boundary tests run with the existing settings test script. Actual
+Store trial acquisition, purchase, cancellation, offline cache, expiration and
+restoration must also be tested using a Store-installed package and test accounts.
+A sideloaded package cannot certify the Store purchase flow. Do not submit until
+these checks and WACK pass. Source and portable distribution remain MIT-licensed.
+
+References: [package requirements](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/app-package-requirements),
+[listing import/export](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/import-and-export-store-listings),
+[Store images](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/screenshots-and-images).
+
+## WinGet publication
 
 Proposed package identifier: `UmbertoGiacobbi.VoiceDucker`. Use package version
 `0.1.0` and the exact final GitHub release asset URLs and SHA-256 hashes.

@@ -23,7 +23,15 @@ public sealed partial class AboutWindow : Window
     {
         InitializeComponent();
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
-        VersionText.Text = $"Version {typeof(App).Assembly.GetName().Version?.ToString(3) ?? "unknown"}";
+        try
+        {
+            var version = Windows.ApplicationModel.Package.Current.Id.Version;
+            VersionText.Text = $"Version {version.Major}.{version.Minor}.{version.Build}.{version.Revision}";
+        }
+        catch (InvalidOperationException)
+        {
+            VersionText.Text = $"Version {typeof(App).Assembly.GetName().Version?.ToString(3) ?? "unknown"}";
+        }
         AboutPanel.Loaded += OnAboutPanelLoaded;
     }
 
