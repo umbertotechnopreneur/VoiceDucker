@@ -71,8 +71,10 @@ and Store license changes stop microphone capture and restore owned audio.
 License policy boundary tests run with the existing settings test script. Actual
 Store trial acquisition, purchase, cancellation, offline cache, expiration and
 restoration must also be tested using a Store-installed package and test accounts.
-A sideloaded package cannot certify the Store purchase flow. Do not submit until
-these checks and WACK pass. Source and portable distribution remain MIT-licensed.
+A sideloaded package cannot certify the Store purchase flow. Run WACK before
+certification, then use a private-audience Store release to acquire a real license
+and complete the Store checks before broad public availability. Source and portable
+distribution remain MIT-licensed.
 
 References: [package requirements](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/app-package-requirements),
 [listing import/export](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/import-and-export-store-listings),
