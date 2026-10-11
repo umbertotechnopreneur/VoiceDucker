@@ -805,8 +805,10 @@ public sealed partial class MainWindow : Window
         if (_licensing.State == LicenseState.Trial) _licenseTimer.Start();
         else _licenseTimer.Stop();
         UpdateLicenseTitle();
-        FooterPurchaseButton.Visibility = _licensing.IsStoreEdition && _licensing.State != LicenseState.Full
+        FooterPurchasePanel.Visibility = _licensing.IsStoreEdition && _licensing.State != LicenseState.Full
             ? Visibility.Visible : Visibility.Collapsed;
+        FooterTrialText.Text = _licensing.State == LicenseState.Trial ? "You're using the trial version"
+            : _licensing.State == LicenseState.Expired ? "Trial expired" : "Microsoft Store edition";
         LicensePanel.Visibility = _licensing.IsStoreEdition && _licensing.State is LicenseState.Checking or LicenseState.Unavailable
             ? Visibility.Visible : Visibility.Collapsed;
         LicenseStatusText.Text = _licensing.State switch

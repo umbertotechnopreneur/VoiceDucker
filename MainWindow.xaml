@@ -240,9 +240,13 @@ VBWR E -->
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <HyperlinkButton x:Name="FooterPurchaseButton" Content="Purchase" Padding="0"
-                                 Visibility="Collapsed" VerticalAlignment="Center" FontSize="12"
-                                 NavigateUri="ms-windows-store://pdp/?productid=9P2F2FCRHS85" />
+                <StackPanel x:Name="FooterPurchasePanel" Visibility="Collapsed"
+                            Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock x:Name="FooterTrialText" Text="You're using the trial version"
+                               FontSize="11" VerticalAlignment="Center" />
+                    <HyperlinkButton Content="Purchase" Padding="0" FontSize="12"
+                                     NavigateUri="ms-windows-store://pdp/?productid=9P2F2FCRHS85" />
+                </StackPanel>
                 <StackPanel Grid.Column="1" HorizontalAlignment="Right"
                             VerticalAlignment="Center" Orientation="Horizontal" Spacing="6">
                     <TextBlock Text="This is VibeWare ·" VerticalAlignment="Center" FontSize="12"
