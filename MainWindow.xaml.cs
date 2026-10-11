@@ -20,7 +20,6 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
 using VoiceDucker.Audio;
-using VoiceDucker.Visuals;
 using Windows.Foundation;
 using Windows.Graphics;
 using Windows.Storage.Streams;
@@ -44,8 +43,8 @@ public sealed partial class MainWindow : Window
     private PlaybackMonitor? _playbackMonitor;
     private DispatcherTimer? _streamTimer;
     private bool _refreshingStreamRows;
-    private readonly AppAudioVisualizers _audioVisualizers = new();
-    private DispatcherTimer? _visualizerTimer;
+    private bool _refreshingMicrophones;
+    private bool _microphoneOperationPending;
 
     public MainWindow()
     {
@@ -83,17 +82,24 @@ public sealed partial class MainWindow : Window
         ReductionBox.Value = _settings.ReductionPercent;
         FadeDownBox.Value = _settings.FadeDownMilliseconds;
         FadeUpBox.Value = _settings.FadeUpMilliseconds;
+        RestoreDelayBox.Value = _settings.RestoreDelayMilliseconds;
         OtherSourcesCheckBox.IsChecked = _settings.IncludeOtherSources;
-        ShowVisualizersCheckBox.IsChecked = _settings.ShowVisualizers;
+        SensitivitySlider.Value = _settings.MicrophoneGainDecibels;
+        UpdateSensitivityLabel();
+        var thresholdDb = 20 * Math.Log10(VoiceGate.Threshold);
+        var thresholdPosition = Math.Clamp((thresholdDb + 60) / 60, 0, 1);
+        ThresholdBeforeColumn.Width = new GridLength(thresholdPosition, GridUnitType.Star);
+        ThresholdAfterColumn.Width = new GridLength(1 - thresholdPosition, GridUnitType.Star);
+        MicrophoneThresholdText.Text = $"Threshold {thresholdDb:0.0} dBFS";
         RefreshHiddenApps();
         _settingsReady = true;
         FeedbackText.Text = settingsError ?? string.Empty;
+        RefreshMicrophoneChoices();
 
         StartupCheckBox.IsEnabled = false;
 
         _engine.StatusChanged += OnStatusChanged;
         AppWindow.Closing += OnWindowClosing;
-        AppWindow.Changed += OnAppWindowChanged;
         RootPanel.Loaded += OnRootLoaded;
         Closed += OnClosed;
     }
@@ -105,13 +111,11 @@ public sealed partial class MainWindow : Window
         try
         {
             _playbackMonitor = new PlaybackMonitor();
-            _streamTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            _streamTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
             _streamTimer.Tick += (_, _) => RefreshStreamRows();
             RefreshStreamRows();
             _streamTimer.Start();
-            _visualizerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
-            _visualizerTimer.Tick += (_, _) => RefreshVisualizers();
-            SynchronizeVisualizers();
+
         }
         catch (Exception exception)
         {
@@ -161,7 +165,10 @@ public sealed partial class MainWindow : Window
 
     private async Task ToggleDuckingAsync()
     {
+        if (_microphoneOperationPending) return;
+        _microphoneOperationPending = true;
         ToggleButton.IsEnabled = false;
+        MicrophoneComboBox.IsEnabled = false;
         try
         {
             if (_engine.IsRunning)
@@ -180,6 +187,8 @@ public sealed partial class MainWindow : Window
         finally
         {
             ToggleButton.IsEnabled = true;
+            MicrophoneComboBox.IsEnabled = true;
+            _microphoneOperationPending = false;
         }
     }
 
@@ -244,7 +253,7 @@ public sealed partial class MainWindow : Window
 
         if (value < sender.Minimum || value > sender.Maximum)
         {
-            FeedbackText.Text = "Reduction: 0–100%; fade down: 0–5000 ms; fade back: 0–30000 ms.";
+            FeedbackText.Text = "Reduction: 0–100%; fade down: 0–5000 ms; wait: 0–10000 ms; fade back: 0–30000 ms.";
             return;
         }
 
@@ -252,7 +261,9 @@ public sealed partial class MainWindow : Window
             ? _settings with { ReductionPercent = (int)value }
             : sender == FadeDownBox
                 ? _settings with { FadeDownMilliseconds = (int)value }
-                : _settings with { FadeUpMilliseconds = (int)value };
+                : sender == RestoreDelayBox
+                    ? _settings with { RestoreDelayMilliseconds = (int)value }
+                    : _settings with { FadeUpMilliseconds = (int)value };
         _settings = next;
         _engine.UpdateSettings(next);
         SaveSettings();
@@ -283,22 +294,91 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void ShowVisualizersCheckBox_Click(object sender, RoutedEventArgs args)
+    private void SensitivitySlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs args)
     {
-        if (!_settingsReady)
-        {
-            return;
-        }
-
-        _settings = _settings with { ShowVisualizers = ShowVisualizersCheckBox.IsChecked == true };
+        UpdateSensitivityLabel();
+        if (!_settingsReady) return;
+        _settings = _settings with { MicrophoneGainDecibels = (int)Math.Round(args.NewValue) };
         _engine.UpdateSettings(_settings);
-        foreach (var row in _streamRows.Values)
-        {
-            row.Visualizer.Visibility = _settings.ShowVisualizers ? Visibility.Visible : Visibility.Collapsed;
-        }
-        SynchronizeVisualizers();
         SaveSettings();
-        WindowContentSizing.Fit(this, RootPanel, 520, preservePosition: true);
+    }
+
+    private void UpdateSensitivityLabel()
+    {
+        if (SensitivityValueText is not null && SensitivitySlider is not null)
+            SensitivityValueText.Text = $"{SensitivitySlider.Value:+0;-0;0} dB";
+    }
+
+    private void SensitivityReset_Click(object sender, RoutedEventArgs args) =>
+        SensitivitySlider.Value = 0;
+
+    private void MicrophoneComboBox_DropDownOpened(object sender, object args) =>
+        RefreshMicrophoneChoices();
+
+    private void RefreshMicrophoneChoices()
+    {
+        _refreshingMicrophones = true;
+        try
+        {
+            var choices = MicrophoneDevices.GetChoices().ToList();
+            var selected = choices.FirstOrDefault(choice => choice.Id == _settings.MicrophoneDeviceId);
+            if (selected is null)
+            {
+                // Keep a disconnected choice visible; never silently switch to another input.
+                selected = new MicrophoneChoice(_settings.MicrophoneDeviceId, "Unavailable microphone — choose another input");
+                choices.Add(selected);
+            }
+            MicrophoneComboBox.ItemsSource = choices;
+            MicrophoneComboBox.SelectedItem = selected;
+            if (!_engine.IsRunning)
+                MicrophoneNameText.Text = $"Microphone: {selected.Name}";
+        }
+        catch (Exception exception)
+        {
+            MicrophoneNameText.Text = "Microphone: device list unavailable";
+            FeedbackText.Text = $"Microphones could not be listed: {exception.Message}";
+        }
+        finally
+        {
+            _refreshingMicrophones = false;
+        }
+    }
+
+    private async void MicrophoneComboBox_SelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (!_settingsReady || _refreshingMicrophones || _microphoneOperationPending ||
+            MicrophoneComboBox.SelectedItem is not MicrophoneChoice choice ||
+            choice.Id == _settings.MicrophoneDeviceId) return;
+
+        _microphoneOperationPending = true;
+        ToggleButton.IsEnabled = false;
+        MicrophoneComboBox.IsEnabled = false;
+        var restart = _engine.IsRunning;
+        try
+        {
+            if (restart)
+            {
+                await Task.Run(_engine.Stop);
+                if (_engine.IsRunning)
+                    throw new InvalidOperationException("The previous microphone has not stopped. The selection was kept unchanged.");
+            }
+            _settings = _settings with { MicrophoneDeviceId = choice.Id };
+            _engine.UpdateSettings(_settings);
+            SaveSettings();
+            MicrophoneNameText.Text = $"Microphone: {choice.Name}";
+            if (restart) _engine.Start();
+        }
+        catch (Exception exception)
+        {
+            RefreshMicrophoneChoices();
+            FeedbackText.Text = $"Microphone could not be changed: {exception.Message}";
+        }
+        finally
+        {
+            ToggleButton.IsEnabled = true;
+            MicrophoneComboBox.IsEnabled = true;
+            _microphoneOperationPending = false;
+        }
     }
 
     private async void StartupCheckBox_Click(object sender, RoutedEventArgs args)
@@ -336,6 +416,20 @@ public sealed partial class MainWindow : Window
             ToggleButtonLabel.Text = status.Running ? "Disable" : "Enable";
             ToggleButtonIcon.Glyph = status.Running ? "\uE769" : "\uE768";
             SetMicLedActive(status.Running);
+            if (status.Running && !string.IsNullOrWhiteSpace(status.MicrophoneName))
+                MicrophoneNameText.Text = $"Microphone: {status.MicrophoneName}";
+            var rms = status.Running && double.IsFinite(status.MicrophoneRms)
+                ? Math.Clamp(status.MicrophoneRms, 0, 1) : 0;
+            var microphoneDb = rms > 0 ? 20 * Math.Log10(rms) : double.NegativeInfinity;
+            var meterFraction = Math.Clamp((microphoneDb + 60) / 60, 0, 1);
+            MicrophoneLevelColumn.Width = new GridLength(meterFraction, GridUnitType.Star);
+            MicrophoneEmptyColumn.Width = new GridLength(1 - meterFraction, GridUnitType.Star);
+            MicrophoneLevelHint.Text = !status.Running
+                ? "Press Enable to see your microphone level."
+                : rms >= VoiceGate.Threshold
+                    ? "Above threshold — sound detected"
+                    : "Below threshold";
+            MicrophoneLevelText.Text = !status.Running ? "Off" : rms <= 0 ? "−∞ dBFS" : $"{microphoneDb:0.0} dBFS";
 
             VisualStateText.Text = !status.Running ? "MIC OFF" :
                 status.Speaking && status.AffectedSessions > 0 ? "AUDIO LOWERING" :
@@ -408,7 +502,8 @@ public sealed partial class MainWindow : Window
                     layoutChanged = true;
                 }
 
-                row.Muted = stream.Muted;
+                var peak = stream.Muted ? 0 : Math.Clamp(stream.Peak, 0, 1);
+                row.Meter.Value = peak <= 0 ? 0 : Math.Clamp((20 * Math.Log10(peak) + 60) / 60 * 100, 0, 100);
                 row.Slider.IsEnabled = !stream.Muted;
                 if (!row.Interacting && row.Slider.FocusState == FocusState.Unfocused)
                 {
@@ -425,32 +520,10 @@ public sealed partial class MainWindow : Window
         }
 
         NoStreamsText.Visibility = streams.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        SynchronizeVisualizers();
         if (layoutChanged)
         {
             WindowContentSizing.Fit(this, RootPanel, 520, preservePosition: true);
         }
-    }
-
-    private void SynchronizeVisualizers()
-    {
-        var visible = _settings.ShowVisualizers && AppWindow.IsVisible &&
-                      AppWindow.Presenter is not OverlappedPresenter { State: OverlappedPresenterState.Minimized };
-        _audioVisualizers.Synchronize(visible ? _streamRows.Values.Select(row => row.ProcessId) : []);
-        if (visible && _streamRows.Count > 0) _visualizerTimer?.Start();
-        else _visualizerTimer?.Stop();
-    }
-
-    private void OnAppWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
-    {
-        if (args.DidVisibilityChange || args.DidSizeChange || args.DidPresenterChange)
-            SynchronizeVisualizers();
-    }
-
-    private void RefreshVisualizers()
-    {
-        foreach (var row in _streamRows.Values)
-            row.Visualizer.Update(_audioVisualizers.GetFrame(row.ProcessId), row.Muted);
     }
 
     private async Task LoadStreamIconAsync(int processId, string key, Image icon)
@@ -489,18 +562,16 @@ public sealed partial class MainWindow : Window
         var name = new TextBlock
         {
             Text = stream.IsSpotify ? "SPOTIFY" : stream.Name.ToUpperInvariant(),
-            FontFamily = CassetteVisualizer.RetroFont,
-            FontSize = 10,
-            Foreground = CassetteVisualizer.Brush(0xE8E2CE),
+            FontFamily = new FontFamily("Consolas"),
+            FontSize = 13,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center
         };
         var percentage = new TextBlock
         {
             Text = $"{Math.Round(stream.Volume * 100):0}%",
-            FontFamily = CassetteVisualizer.RetroFont,
-            FontSize = 10,
-            Foreground = CassetteVisualizer.Brush(0xE8E2CE),
+            FontFamily = new FontFamily("Consolas"),
+            FontSize = 13,
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Right
         };
@@ -508,33 +579,16 @@ public sealed partial class MainWindow : Window
         title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
         title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(name, 1);
         Grid.SetColumn(percentage, 2);
         title.Children.Add(name);
         title.Children.Add(percentage);
-        var remove = new Button
-        {
-            Content = "Remove", FontFamily = CassetteVisualizer.RetroFont, FontSize = 7,
-            Padding = new Thickness(8, 5, 8, 5), MinWidth = 0, MinHeight = 24,
-            Foreground = CassetteVisualizer.Brush(0xE8E2CE),
-            Background = CassetteVisualizer.Brush(0x171A17),
-            BorderBrush = CassetteVisualizer.Brush(0x686B60),
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(remove, $"Remove {stream.Name}");
-        ToolTipService.SetToolTip(remove,
-            "Hide this app and exclude it from lowering. Restore it under Hidden apps.");
-        remove.Click += (_, _) => SetProcessHidden(stream.Name, true);
-        Grid.SetColumn(remove, 3);
-        title.Children.Add(remove);
         var icon = new Image { Width = 24, Height = 24, Stretch = Stretch.Uniform };
         var iconPlaceholder = new FontIcon
         {
             Glyph = "\uE80A",
             FontFamily = new FontFamily("Segoe Fluent Icons"),
             FontSize = 16,
-            Foreground = CassetteVisualizer.Brush(0xE8E2CE),
             Opacity = 0.55
         };
         var iconLayer = new Grid { Width = 24, Height = 24, Margin = new Thickness(0, 0, 8, 0) };
@@ -550,31 +604,24 @@ public sealed partial class MainWindow : Window
             Value = Math.Clamp(stream.Volume * 100, 0, 100),
             IsEnabled = !stream.Muted
         };
-        slider.Resources["SliderTrackFill"] = CassetteVisualizer.Brush(0x111411);
-        slider.Resources["SliderTrackValueFill"] = CassetteVisualizer.Brush(0xD3CEBA);
-        slider.Resources["SliderThumbBackground"] = CassetteVisualizer.Brush(0xE8E2CE);
-        slider.Resources["SliderThumbBackgroundPointerOver"] = CassetteVisualizer.Brush(0xFFF3D0);
-        slider.Resources["SliderThumbBackgroundPressed"] = CassetteVisualizer.Brush(0xC6B98E);
-        var visualizer = new CassetteVisualizer
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(slider, $"{stream.Name} volume");
+        // Overlay the session peak on the slider track; volume remains independently draggable.
+        var meter = new ProgressBar
         {
-            Visibility = _settings.ShowVisualizers ? Visibility.Visible : Visibility.Collapsed
+            Minimum = 0, Maximum = 100, Value = 0, Height = 4,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(12, 0, 12, 0), IsHitTestVisible = false,
+            Foreground = new SolidColorBrush(Color.FromArgb(255, 246, 162, 76)),
+            Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0))
         };
-        ToolTipService.SetToolTip(visualizer,
-            "Stereo VU: 0 = -18 dBFS RMS. Spectrum: 40 Hz to 16 kHz. App process audio across outputs.");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(meter, $"{stream.Name} audio level");
+        var volumeTrack = new Grid();
+        volumeTrack.Children.Add(slider);
+        volumeTrack.Children.Add(meter);
         var panel = new StackPanel { Spacing = 6 };
         panel.Children.Add(title);
-        panel.Children.Add(slider);
-        panel.Children.Add(visualizer);
-        var card = new Border
-        {
-            Child = panel,
-            Padding = new Thickness(12),
-            CornerRadius = new CornerRadius(4),
-            BorderThickness = new Thickness(1),
-            BorderBrush = CassetteVisualizer.Brush(0x4B4E48),
-            Background = CassetteVisualizer.Brush(0x272B28)
-        };
-        var row = new StreamRow(card, slider, visualizer, percentage, icon, stream.ProcessId) { Muted = stream.Muted };
+        panel.Children.Add(volumeTrack);
+        var row = new StreamRow(panel, slider, meter, percentage, icon);
         slider.PointerPressed += (_, _) => row.Interacting = true;
         slider.PointerReleased += (_, _) => row.Interacting = false;
         slider.PointerCanceled += (_, _) => row.Interacting = false;
@@ -640,17 +687,15 @@ public sealed partial class MainWindow : Window
         HiddenAppsButton.Flyout = new Flyout { Content = panel };
     }
 
-    private sealed class StreamRow(Border card, Slider slider, CassetteVisualizer visualizer,
-        TextBlock percentage, Image icon, int processId)
+    private sealed class StreamRow(StackPanel card, Slider slider, ProgressBar meter,
+        TextBlock percentage, Image icon)
     {
-        public Border Card { get; } = card;
+        public StackPanel Card { get; } = card;
         public Slider Slider { get; } = slider;
-        public CassetteVisualizer Visualizer { get; } = visualizer;
+        public ProgressBar Meter { get; } = meter;
         public TextBlock Percentage { get; } = percentage;
         public Image Icon { get; } = icon;
         public bool Interacting { get; set; }
-        public int ProcessId { get; } = processId;
-        public bool Muted { get; set; }
     }
 
     private void SetMicLedActive(bool active)
@@ -774,12 +819,9 @@ public sealed partial class MainWindow : Window
         _micLedPulse.Stop();
         _mixerPulse.Stop();
         _streamTimer?.Stop();
-        _visualizerTimer?.Stop();
-        _audioVisualizers.Dispose();
         _playbackMonitor?.Dispose();
         _engine.StatusChanged -= OnStatusChanged;
         AppWindow.Closing -= OnWindowClosing;
-        AppWindow.Changed -= OnAppWindowChanged;
         _tray?.Dispose();
         _aboutWindow?.Close();
         _closeChoice?.Close();
