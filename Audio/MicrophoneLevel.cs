@@ -28,6 +28,9 @@ internal static class MicrophoneLevel
                 (format.BitsPerSample == 16 || format.BitsPerSample == 24 || format.BitsPerSample == 32));
     }
 
+    // Software gain on captured RMS is equivalent to scaling PCM before level detection.
+    public static double ApplyGain(double rms, int decibels) => rms * Math.Pow(10, decibels / 20.0);
+
     public static double Rms(ReadOnlySpan<byte> audio, WaveFormat format)
     {
         var sampleBytes = format.BitsPerSample / 8;

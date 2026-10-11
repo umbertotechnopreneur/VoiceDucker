@@ -28,3 +28,9 @@ network calls or startup registration without a request.
 - Work on topic branches and propose pull requests for `main`. The repository
   owner controls merges and any direct bypass allowed by GitHub protection.
 - Keep public documentation in English; discuss work with the owner in Italian.
+- When the owner requests an installer, build the updated MSIX, terminate any
+  running VoiceDucker instance, install the new package, and verify the installed
+  version and deployment status. The owner has authorized forced termination for
+  this workflow; no additional confirmation is needed. Preserve saved settings
+  and restart the installed app with microphone capture off. An explicit request
+  to compile only or skip installation takes precedence.

@@ -113,10 +113,13 @@ internal sealed class DuckingEngine : IDisposable
     {
         PlaybackSessions? playback = null;
         string? error = null;
+        string? microphoneName = null;
         try
         {
             using var devices = new MMDeviceEnumerator();
-            using var microphone = devices.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
+            using var microphone = MicrophoneDevices.OpenSelected(devices,
+                Volatile.Read(ref _settings).MicrophoneDeviceId);
+            microphoneName = microphone.FriendlyName;
             using var capture = new WasapiCapture(microphone);
             if (!MicrophoneLevel.IsSupported(capture.WaveFormat))
             {
@@ -124,10 +127,22 @@ internal sealed class DuckingEngine : IDisposable
             }
 
             var gate = new VoiceGate();
+            Exception? captureFailure = null;
+            capture.RecordingStopped += (_, args) =>
+            {
+                if (args.Exception is not null || !stop.IsSet)
+                {
+                    Volatile.Write(ref captureFailure, args.Exception ?? new InvalidOperationException(
+                        "The microphone stopped unexpectedly. Check its connection and enable listening again."));
+                    stop.Set();
+                }
+            };
             capture.DataAvailable += (_, args) =>
             {
                 var audio = args.Buffer.AsSpan(0, args.BytesRecorded);
-                var level = MicrophoneLevel.Rms(audio, capture.WaveFormat);
+                var settings = Volatile.Read(ref _settings);
+                var level = MicrophoneLevel.ApplyGain(
+                    MicrophoneLevel.Rms(audio, capture.WaveFormat), settings.MicrophoneGainDecibels);
                 Volatile.Write(ref _microphoneLevel, level);
                 gate.Observe(level);
             };
@@ -136,8 +151,9 @@ internal sealed class DuckingEngine : IDisposable
 
             while (!stop.Wait(50))
             {
-                var speaking = gate.IsSpeaking;
                 var settings = Volatile.Read(ref _settings);
+                gate.HoldMilliseconds = settings.RestoreDelayMilliseconds;
+                var speaking = gate.IsSpeaking;
                 var lowered = playback.Update(speaking, settings);
                 var message = speaking && lowered > 0
                     ? $"Microphone sound detected. Reducing {lowered} playing session(s) by up to {settings.ReductionPercent}%."
@@ -148,12 +164,16 @@ internal sealed class DuckingEngine : IDisposable
                         : playback.HasOwnedSessions
                             ? "Listening. Playback is returning to its previous level."
                             : "Listening. Playback is at its previous level.";
-                var visualLevel = Math.Round(Math.Clamp(
-                    Volatile.Read(ref _microphoneLevel) / 0.08, 0, 1) * 20) / 20;
-                Publish(true, speaking, lowered, visualLevel, message);
+                var rms = Math.Clamp(Volatile.Read(ref _microphoneLevel), 0, 1);
+                var visualLevel = Math.Round(Math.Clamp(rms / 0.08, 0, 1) * 20) / 20;
+                Publish(true, speaking, lowered, visualLevel, message, microphoneName, rms);
             }
 
             capture.StopRecording();
+            if (Volatile.Read(ref captureFailure) is { } failure)
+            {
+                throw new InvalidOperationException($"Microphone capture failed: {failure.Message}", failure);
+            }
         }
         catch (Exception exception)
         {
@@ -180,9 +200,10 @@ internal sealed class DuckingEngine : IDisposable
     }
 
     private void Publish(bool running, bool speaking, int affectedSessions,
-        double microphoneLevel, string message)
+        double microphoneLevel, string message, string? microphoneName = null, double microphoneRms = 0)
     {
-        var status = new EngineStatus(running, speaking, affectedSessions, microphoneLevel, message);
+        var status = new EngineStatus(running, speaking, affectedSessions, microphoneLevel, message,
+            microphoneName, microphoneRms);
         lock (_stateLock)
         {
             if (_lastStatus == status)

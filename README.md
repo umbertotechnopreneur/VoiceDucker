@@ -37,30 +37,41 @@ Every valid audio setting is saved immediately, including while I type a number,
 and restored after app or Windows restarts. Windows startup changes take effect
 as soon as I toggle the checkbox. The microphone still starts off.
 
-The main window shows each app's Cassette 1984 panel above Advanced options:
-cream L/R analog-style VU meters and a 24-band spectrum. **Show visualizers** in
-Advanced options controls their visibility. The needles
-use stereo RMS levels (0 VU = -18 dBFS); the spectrum covers 40 Hz to 16 kHz.
-Audio is captured from the listed process and its child processes, across output
-devices, using [Windows application loopback](https://learn.microsoft.com/en-us/samples/microsoft/windows-classic-samples/applicationloopbackaudio-sample/).
-Sessions belonging to the same process share the same visualizer data. Capture
-runs while the window is visible and the visualizers are enabled;
-hiding the visualizers, minimizing the window, or exiting releases capture. Audio
-buffers stay in memory; this does not enable the microphone or record files.
-This choice is saved immediately and restored at the next launch. The retro
-[Press Start 2P font](https://github.com/google/fonts/tree/main/ofl/pressstart2p)
-is bundled under the SIL Open Font License (see `Assets/Fonts/OFL-PressStart2P.txt`).
+Each app appears as a simple row without a card or Remove button. Its live
+session peak meter overlays the volume slider, with a -60 to 0 dBFS display range.
+The first Advanced option is **Sensitivity**, a full-width slider from -24 to +36 dB.
+It applies software gain after microphone capture, before sound detection and the
+microphone meter. It updates immediately and is saved across restarts. It does
+not change the Windows microphone volume or the input used by other apps.
+Any sound above the resulting detection threshold can lower playback.
+
+**Reset** next to Sensitivity returns microphone gain to 0 dB. The microphone
+level meter uses a thick green bar, shows the live post-gain signal from -60 to
+0 dBFS, and marks the detection
+threshold at about -35 dBFS, so adjusting sensitivity has a visible reference.
+The meter labels whether the current sound is above or below the threshold.
+While the microphone is off, it prompts me to press Enable to see the level.
+The Sensitivity slider uses the same green color.
+
+**Microphone** lets me select an active input or use the Windows communications
+default; the main window shows the actual device in use. Selecting another input
+while enabled restarts capture on that device. If a saved device is unavailable,
+VoiceDucker reports it rather than silently switching microphones. The list
+refreshes when I open the selector. Selecting an input while disabled does not
+start capture.
+
+**Wait before fade back (ms)** keeps audio lowered during short pauses, starting
+from the last detected sound. The default is 650 ms, adjustable from 0 to 10,000 ms.
+After that wait, the existing Fade back duration controls the return to my volume.
+Changing the wait takes effect immediately. Both the microphone choice and wait
+are saved across restarts.
 
 I can change these settings in the window. If I move an app's volume slider
 myself, VoiceDucker leaves my new choice alone. On a normal exit, it returns
 the sessions it still controls to their previous levels over **2,000 ms**.
 
-VoiceDucker's own audio sessions are filtered by process name. Each stream's
-**Remove** button hides that process from every stream card and excludes it from
-automatic volume lowering. The blacklist is saved immediately and survives
-app and Windows restarts. **Hidden apps** in Advanced options lets me restore
-an app. Sessions already lowered return to their owned previous level using
-the configured fade back; manual mixer overrides are preserved.
+VoiceDucker's own audio sessions are filtered by process name. Existing hidden
+apps remain excluded; **Hidden apps** in Advanced options lets me restore them.
 
 See [release and WinGet instructions](docs/RELEASING.md) for packaging and publication.
 

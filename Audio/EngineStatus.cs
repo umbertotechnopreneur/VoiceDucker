@@ -18,4 +18,6 @@ public sealed record EngineStatus(
     bool Speaking,
     int AffectedSessions,
     double MicrophoneLevel,
-    string Message);
+    string Message,
+    string? MicrophoneName = null,
+    double MicrophoneRms = 0);

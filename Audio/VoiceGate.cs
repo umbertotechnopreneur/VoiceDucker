@@ -15,24 +15,50 @@ namespace VoiceDucker.Audio;
 
 internal sealed class VoiceGate
 {
-    private const double Threshold = 0.018;
-    private const long HoldMilliseconds = 650;
+    public const double Threshold = 0.018;
+    private readonly Func<long> _clock;
+    private int _holdMilliseconds = 650;
     private long _lastLoudTick = -1;
+    private double _latestRms;
+
+    public VoiceGate(Func<long>? clock = null)
+    {
+        _clock = clock ?? (() => Environment.TickCount64);
+    }
+
+    public int HoldMilliseconds
+    {
+        get => Volatile.Read(ref _holdMilliseconds);
+        set
+        {
+            if (value is < 0 or > 10000)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
+            Volatile.Write(ref _holdMilliseconds, value);
+        }
+    }
 
     public void Observe(double rms)
     {
         if (rms >= Threshold)
         {
-            Volatile.Write(ref _lastLoudTick, Environment.TickCount64);
+            Volatile.Write(ref _lastLoudTick, _clock());
         }
+        Volatile.Write(ref _latestRms, rms);
     }
 
     public bool IsSpeaking
     {
         get
         {
+            if (Volatile.Read(ref _latestRms) >= Threshold)
+            {
+                return true;
+            }
             var last = Volatile.Read(ref _lastLoudTick);
-            return last >= 0 && Environment.TickCount64 - last <= HoldMilliseconds;
+            var holdMilliseconds = HoldMilliseconds;
+            return holdMilliseconds > 0 && last >= 0 && _clock() - last <= holdMilliseconds;
         }
     }
 }
