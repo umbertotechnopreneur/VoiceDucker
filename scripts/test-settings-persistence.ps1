@@ -230,7 +230,7 @@ gate.HoldMilliseconds = 1000;
 Check(gate.IsSpeaking, "Lengthening the delay did not apply to the most recent sound.");
 now += 701;
 Check(!gate.IsSpeaking, "The lengthened pause did not expire.");
-Console.WriteLine("PASS: abrupt restart including microphone choice and pause delay; delay bounds/null input, legacy defaults, exclusions, interrupted write, replacement, corrupt/missing files, failed-write cleanup; deterministic quiet startup, brief pause, expiry, resumed sound, zero delay, live delay changes. No microphone or playback capture.");
+Console.WriteLine("PASS: Store license states, trial expiration boundary and singular/plural titles; abrupt restart including microphone choice and pause delay; delay bounds/null input, legacy defaults, exclusions, interrupted write, replacement, corrupt/missing files, failed-write cleanup; deterministic quiet startup, brief pause, expiry, resumed sound, zero delay, live delay changes. No microphone or playback capture.");
 '@ | Set-Content -LiteralPath (Join-Path $testRoot 'Program.cs') -Encoding utf8
 
 & dotnet build (Join-Path $testRoot 'PersistenceTests.csproj') -c Release -p:ImportDirectoryBuildProps=false --nologo
