@@ -30,7 +30,7 @@ public sealed partial class AboutWindow : Window
     private void OnAboutPanelLoaded(object sender, RoutedEventArgs args)
     {
         AboutPanel.Loaded -= OnAboutPanelLoaded;
-        WindowContentSizing.Fit(this, AboutPanel, 430);
+        WindowContentSizing.Fit(this, AboutPanel, 560);
     }
 
     private void Close_Click(object sender, RoutedEventArgs args) => Close();

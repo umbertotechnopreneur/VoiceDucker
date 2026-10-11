@@ -35,6 +35,7 @@ VBWR E -->
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="docs\licenses\octicons.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Assets\Fonts\PressStart2P-Regular.ttf" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Assets\Fonts\OFL-PressStart2P.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Assets\SplashScreen.scale-200.png" />
