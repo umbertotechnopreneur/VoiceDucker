@@ -6,6 +6,8 @@ Imagine your music is playing and you want to talk. You say, "A little quieter, 
 
 I talk to AI while Spotify keeps me company. Windows' **Communications** setting did not lower Spotify the way I needed, and reaching for the volume slider every time got old. So I made a tiny volume referee: VoiceDucker.
 
+**Focus on your voice. Let your audio step back.**
+
 I press **Enable** when I want it to listen to my microphone. When I speak, it lowers Spotify; I can choose other playing apps too. When I stop, it fades them back to the volume I chose. My voice stays in memory: no recordings, transcription, or uploads.
 
 VoiceDucker is a **native Windows desktop app built with WinUI 3**, the same UI framework we use for our newer Windows apps. We pay close attention to **RAM usage, performance, and disk footprint**. There is always room to improve, and we keep working on optimizations.
@@ -117,10 +119,21 @@ alias to launch the installed app. The portable build uses the stable path
   <img align="right" src="https://raw.githubusercontent.com/umbertotechnopreneur/VibeWare/main/Branding/vibeware-logo.png" alt="VibeWare floppy logo" width="180">
 </a>
 
-### This is VibeWare
+### This is VibeWare · [Manifesto](https://umbertogiacobbi.biz/vibeware/manifesto)
 
-VibeWare is a term coined by [Umberto Giacobbi](https://umbertogiacobbi.biz) and an open initiative for developers who build with AI and care about the craft. It challenges the assumption that vibe coding is synonymous with low-quality code. It openly acknowledges the weaknesses and risks of AI-generated software: experienced developers must guide the process, test carefully, check security and take responsibility for the result. A VibeWare footer simply says: this software was developed with AI, and it deserves to be judged by the quality of the work.
+I created VoiceDucker with AI assistance. I define its purpose, guide the implementation, and take responsibility for checking functionality, performance, and security. VibeWare is my initiative for building useful software openly with AI; I ask you to judge the result and the evidence behind it.
 
-[Read the VibeWare manifesto](https://umbertogiacobbi.biz/vibeware/manifesto)
+To learn what VibeWare means and why I created it, read the [VibeWare manifesto](https://umbertogiacobbi.biz/vibeware/manifesto).
+
+[VoiceDucker on GitHub](https://github.com/umbertotechnopreneur/VoiceDucker) · [VibeWare on GitHub](https://github.com/umbertotechnopreneur/VibeWare) · [umbertogiacobbi.biz](https://umbertogiacobbi.biz)
+
+[Terms](https://umbertogiacobbi.biz/terms/) · [Privacy](https://umbertogiacobbi.biz/privacy/)
 
 *You are welcome to explore, adapt and reuse the open-source VibeWare materials under the project license — my contribution to the developer community.*
+
+The Microsoft Store edition uses the Store-managed 30-day trial and a one-time
+purchase at the price shown for your market (base US price: $1.99). The trial
+does not automatically charge you. Store license status and expiration govern
+access; the app stops monitoring and restores audio it still owns if access ends.
+Local development packages and the MIT portable distribution do not use Store
+licensing. This does not change the source license.

@@ -20,6 +20,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
 using VoiceDucker.Audio;
+using VoiceDucker.Licensing;
 using Windows.Foundation;
 using Windows.Graphics;
 using Windows.Storage.Streams;
@@ -45,10 +46,27 @@ public sealed partial class MainWindow : Window
     private bool _refreshingStreamRows;
     private bool _refreshingMicrophones;
     private bool _microphoneOperationPending;
+    private readonly DispatcherTimer _footerTimer = new() { Interval = TimeSpan.FromSeconds(30) };
+    private readonly Storyboard _footerFade = new();
+    private bool _footerPointerOver;
+    private readonly StoreLicenseService _licensing;
+    private readonly DispatcherTimer _licenseTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private bool _trialExpiryShown;
 
     public MainWindow()
     {
         InitializeComponent();
+        var footerFade = new DoubleAnimation
+        {
+            From = 1,
+            To = 0,
+            Duration = new Duration(TimeSpan.FromSeconds(3))
+        };
+        Storyboard.SetTarget(footerFade, FooterLinks);
+        Storyboard.SetTargetProperty(footerFade, "Opacity");
+        _footerFade.Children.Add(footerFade);
+        _footerFade.Completed += (_, _) => FooterLinks.IsHitTestVisible = false;
+        _footerTimer.Tick += FooterTimer_Tick;
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
 
         var pulse = new DoubleAnimation
@@ -79,6 +97,9 @@ public sealed partial class MainWindow : Window
 
         _settings = SettingsStore.Load(out var settingsError);
         _engine = new DuckingEngine(_settings);
+        _licensing = new StoreLicenseService(this);
+        _licensing.Changed += OnLicenseChanged;
+        _licenseTimer.Tick += (_, _) => { _licensing.CheckExpiration(); UpdateLicenseTitle(); };
         ReductionBox.Value = _settings.ReductionPercent;
         FadeDownBox.Value = _settings.FadeDownMilliseconds;
         FadeUpBox.Value = _settings.FadeUpMilliseconds;
@@ -108,6 +129,12 @@ public sealed partial class MainWindow : Window
     {
         RootPanel.Loaded -= OnRootLoaded;
         WindowContentSizing.Fit(this, RootPanel, 520);
+        RevealFooter();
+        if (_licensing.IsStoreEdition)
+        {
+            await UpdateLicenseUiAsync();
+            _ = _licensing.RefreshAsync();
+        }
         try
         {
             _playbackMonitor = new PlaybackMonitor();
@@ -177,6 +204,12 @@ public sealed partial class MainWindow : Window
             }
             else
             {
+                await _licensing.RefreshAsync();
+                if (!_licensing.CanUseApp)
+                {
+                    FeedbackText.Text = "An active Microsoft Store license is required. Check the license or buy VoiceDucker.";
+                    return;
+                }
                 _engine.Start();
             }
         }
@@ -366,7 +399,7 @@ public sealed partial class MainWindow : Window
             _engine.UpdateSettings(_settings);
             SaveSettings();
             MicrophoneNameText.Text = $"Microphone: {choice.Name}";
-            if (restart) _engine.Start();
+            if (restart && _licensing.CanUseApp) _engine.Start();
         }
         catch (Exception exception)
         {
@@ -756,6 +789,110 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void RevealFooter()
+    {
+        _footerFade.Stop();
+        FooterLinks.Opacity = 1;
+        FooterLinks.IsHitTestVisible = true;
+        _footerTimer.Stop();
+        _footerTimer.Start();
+    }
+
+    private void OnLicenseChanged() => DispatcherQueue.TryEnqueue(() => _ = UpdateLicenseUiAsync());
+
+    private async Task UpdateLicenseUiAsync()
+    {
+        if (_licensing.State == LicenseState.Trial) _licenseTimer.Start();
+        else _licenseTimer.Stop();
+        UpdateLicenseTitle();
+        FooterPurchasePanel.Visibility = _licensing.IsStoreEdition && _licensing.State != LicenseState.Full
+            ? Visibility.Visible : Visibility.Collapsed;
+        FooterTrialText.Text = _licensing.State == LicenseState.Trial ? "You're using the trial version"
+            : _licensing.State == LicenseState.Expired ? "Trial expired" : "Microsoft Store edition";
+        LicensePanel.Visibility = _licensing.IsStoreEdition && _licensing.State is LicenseState.Checking or LicenseState.Unavailable
+            ? Visibility.Visible : Visibility.Collapsed;
+        LicenseStatusText.Text = _licensing.State switch
+        {
+            LicenseState.Trial => $"Free trial — {Math.Max(1, (int)Math.Ceiling((_licensing.Expires - DateTimeOffset.UtcNow).TotalDays))} days remaining. Ends {_licensing.Expires.LocalDateTime:d}. Purchase is optional; no automatic charge.",
+            LicenseState.Expired => "Your trial or license has ended. Buy VoiceDucker to keep using it.",
+            LicenseState.Checking => "Checking your Microsoft Store license…",
+            LicenseState.Unavailable => "Your Microsoft Store license could not be checked. Please retry.",
+            _ => string.Empty
+        };
+        if (!_licensing.CanUseApp && _engine.IsRunning)
+        {
+            try { await Task.Run(_engine.Stop); }
+            catch (Exception exception) { FeedbackText.Text = $"Audio restoration failed: {exception.Message}"; }
+        }
+        if (RootPanel.IsLoaded)
+            WindowContentSizing.Fit(this, RootPanel, 520, preservePosition: true);
+        if (_licensing.State == LicenseState.Expired && _licensing.IsTrialLicense && !_trialExpiryShown)
+        {
+            _trialExpiryShown = true;
+            RevealFooter();
+            try
+            {
+                AppWindow.Show();
+                Activate();
+                var dialog = new ContentDialog
+                {
+                    XamlRoot = RootPanel.XamlRoot,
+                    Title = "Your free trial has ended",
+                    Content = "Thank you for trying VoiceDucker. Your 30-day free trial has ended. Visit Microsoft Store to purchase your copy of the app. You can also visit GitHub to study, copy and adapt the source under its MIT license.",
+                    PrimaryButtonText = "Open Microsoft Store",
+                    SecondaryButtonText = "View source on GitHub",
+                    CloseButtonText = "Close"
+                };
+                var result = await dialog.ShowAsync();
+                if (result == ContentDialogResult.Primary)
+                    await Windows.System.Launcher.LaunchUriAsync(new Uri($"ms-windows-store://pdp/?productid={StoreLicenseService.StoreId}"));
+                else if (result == ContentDialogResult.Secondary)
+                    await Windows.System.Launcher.LaunchUriAsync(new Uri("https://github.com/umbertotechnopreneur/VoiceDucker"));
+            }
+            catch (Exception) { FeedbackText.Text = "Your trial has ended. Use Purchase to open Microsoft Store, or visit VoiceDucker on GitHub."; }
+        }
+    }
+
+    private void UpdateLicenseTitle()
+    {
+        var title = LicensePolicy.WindowTitle("VoiceDucker", _licensing.State, _licensing.Expires, DateTimeOffset.UtcNow);
+        if (Title != title) Title = title;
+    }
+
+    private async void CheckLicense_Click(object sender, RoutedEventArgs args) => await _licensing.RefreshAsync();
+
+    private void Footer_PointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs args)
+    {
+        _footerPointerOver = true;
+        RevealFooter();
+    }
+
+    private void Footer_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs args)
+    {
+        _footerPointerOver = false;
+        _footerTimer.Stop();
+        _footerTimer.Start();
+    }
+
+    private void Footer_GotFocus(object sender, RoutedEventArgs args) => RevealFooter();
+
+    private void FooterTimer_Tick(object? sender, object args)
+    {
+        // Keep links visible while the user is interacting with them, including by keyboard.
+        var focusedElement = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(RootPanel.XamlRoot) as DependencyObject;
+        while (focusedElement is not null)
+        {
+            if (focusedElement == FooterLinks)
+                return;
+            focusedElement = VisualTreeHelper.GetParent(focusedElement);
+        }
+        if (_footerPointerOver)
+            return;
+        _footerTimer.Stop();
+        _footerFade.Begin();
+        // Preserve the footer's layout space so the interface does not jump after fading.
+    }
+
     private void AboutButton_Click(object sender, RoutedEventArgs args) => ShowAbout();
 
     private void ShowAbout()
@@ -816,6 +953,11 @@ public sealed partial class MainWindow : Window
 
     private void OnClosed(object sender, WindowEventArgs args)
     {
+        _licenseTimer.Stop();
+        _licensing.Changed -= OnLicenseChanged;
+        _licensing.Dispose();
+        _footerTimer.Stop();
+        _footerFade.Stop();
         _micLedPulse.Stop();
         _mixerPulse.Stop();
         _streamTimer?.Stop();

@@ -28,6 +28,13 @@ network calls or startup registration without a request.
 - Work on topic branches and propose pull requests for `main`. The repository
   owner controls merges and any direct bypass allowed by GitHub protection.
 - Keep public documentation in English; discuss work with the owner in Italian.
+- Follow VibeWare's shared `templates/APP-PUBLICATION.md` guidance for the main
+  footer, About disclosure, repository/site/manifesto links and centered Terms
+  and Privacy links. The shared legal pages cover applications that reference
+  them; retain app-specific data handling in this repository's documentation.
+- Keep main-window footer links visible for 30 seconds, then fade them out over
+  3 seconds without shifting layout. Restore them on footer hover or keyboard
+  focus and keep them visible during interaction. About links remain available.
 - When the owner requests an installer, build the updated MSIX, terminate any
   running VoiceDucker instance, install the new package, and verify the installed
   version and deployment status. The owner has authorized forced termination for

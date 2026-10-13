@@ -19,12 +19,20 @@ param(
     [ValidateSet('x64', 'ARM64')]
     [string]$Architecture = 'x64',
     [string]$CertificateThumbprint,
+    [switch]$Store,
     [switch]$Unsigned,
     [switch]$Install
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+if ($Store) {
+    if ($Install -or -not [string]::IsNullOrWhiteSpace($CertificateThumbprint)) {
+        throw 'Store builds are unsigned upload packages; do not supply Install or a local certificate.'
+    }
+    $Unsigned = $true
+}
 
 if ($Install -and $Unsigned) { throw 'An unsigned package cannot be installed by this script.' }
 if (-not $Unsigned -and [string]::IsNullOrWhiteSpace($CertificateThumbprint)) {
@@ -36,10 +44,18 @@ $project = Join-Path $root 'VoiceDucker.csproj'
 $manifest = [xml](Get-Content -LiteralPath (Join-Path $root 'Package.appxmanifest') -Raw)
 $identity = $manifest.Package.Identity
 $version = [version]$identity.Version
+if ($Store) {
+    if ($version.Revision -ne 0) { throw 'Store package versions must end in .0.' }
+    $storeIdentity = Get-Content -LiteralPath (Join-Path $root 'Properties\StoreIdentity.json') -Raw | ConvertFrom-Json
+    $identity.Name = $storeIdentity.Name
+    $identity.Publisher = $storeIdentity.Publisher
+    $manifest.Package.Properties.PublisherDisplayName = $storeIdentity.PublisherDisplayName
+}
 $publisher = [string]$identity.Publisher
 $runtime = 'win-' + $Architecture.ToLowerInvariant()
+$channel = if ($Store) { 'store' } else { 'release' }
 $packageDirectory = [System.IO.Path]::GetFullPath(
-    (Join-Path $root "artifacts\msix\release\$version\$($Architecture.ToLowerInvariant())"))
+    (Join-Path $root "artifacts\msix\$channel\$version\$($Architecture.ToLowerInvariant())"))
 $repositoryPrefix = $root.TrimEnd('\') + '\'
 if (-not $packageDirectory.StartsWith($repositoryPrefix, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Package output is outside the repository: $packageDirectory"
@@ -78,6 +94,11 @@ $arguments = @(
     '/p:DebugSymbols=false', '/p:DebugType=None',
     '/p:AppxSymbolPackageEnabled=false'
 )
+if ($Store) {
+    $storeManifestPath = Join-Path $packageDirectory 'Store.appxmanifest'
+    $manifest.Save($storeManifestPath)
+    $arguments += "/p:VoiceDuckerStoreManifest=$storeManifestPath"
+}
 if ($Unsigned) {
     $arguments += '/p:AppxPackageSigningEnabled=false'
 }
@@ -111,6 +132,9 @@ try {
         $packageIdentity.Version -ne $version.ToString() -or
         $packageIdentity.ProcessorArchitecture -ine $Architecture) {
         throw 'The built MSIX identity, version, or architecture does not match the source manifest.'
+    }
+    if ($Store -and $packageManifest.Package.Properties.PublisherDisplayName -cne $storeIdentity.PublisherDisplayName) {
+        throw 'Store publisher display name does not match Partner Center.'
     }
 }
 finally { $archive.Dispose() }

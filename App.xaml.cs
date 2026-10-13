@@ -59,6 +59,17 @@ public partial class App : Application
             _instanceMutex.Dispose();
             _instanceMutex = null;
             var existingWindow = FindWindow(null, "VoiceDucker");
+            if (existingWindow == IntPtr.Zero)
+                existingWindow = FindWindow(null, "VoiceDucker - Trial Expired");
+            for (var days = 1; existingWindow == IntPtr.Zero && days <= 30; days++)
+                existingWindow = FindWindow(null, $"VoiceDucker - Free Trial, {days} {(days == 1 ? "day" : "days")} remaining");
+            if (existingWindow == IntPtr.Zero)
+            {
+                // Trial editions change the window title; still reactivate the existing instance.
+                using var existingProcess = System.Diagnostics.Process.GetProcessesByName("VoiceDucker")
+                    .FirstOrDefault(process => process.Id != Environment.ProcessId && process.MainWindowHandle != IntPtr.Zero);
+                existingWindow = existingProcess?.MainWindowHandle ?? IntPtr.Zero;
+            }
             if (existingWindow != IntPtr.Zero)
             {
                 ShowWindow(existingWindow, 9); // SW_RESTORE also shows a window hidden in the tray.
