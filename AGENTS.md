@@ -34,3 +34,7 @@ network calls or startup registration without a request.
   this workflow; no additional confirmation is needed. Preserve saved settings
   and restart the installed app with microphone capture off. An explicit request
   to compile only or skip installation takes precedence.
+
+## Shared publication interface
+
+Follow VibeWare templates/APP-PUBLICATION.md: centered About app · Terms · Privacy, first-person About disclosure, application and VibeWare GitHub links, personal site, and one-line This is VibeWare · Manifesto. Use the generic website legal pages with app-specific data documentation. Show main footer links for 30 seconds, fade over 3 seconds, preserve layout and reveal on hover or keyboard focus. Keep About links available.

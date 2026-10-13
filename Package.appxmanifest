@@ -3,7 +3,7 @@
   Project: VoiceDucker
   Repository: https://github.com/umbertotechnopreneur/VoiceDucker
   Creator: Umberto Giacobbi | https://umbertogiacobbi.biz
-  VibeWare initiative: Human intent. AI implementation. Accountable human review.
+  VibeWare initiative: Human intent, AI execution, and plenty of tokens
   Manifesto: https://umbertogiacobbi.biz/vibeware/manifesto
   Created with AI: OpenAI Codex assisted the initial implementation; Git history
   Modified with AI: OpenAI Codex; playback wording, 2026-10-08
@@ -52,7 +52,7 @@ VBWR E -->
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
         DisplayName="VoiceDucker"
-        Description="Lower playing audio while speaking. By Umberto Giacobbi, part of VibeWare."
+        Description="Lower playing audio while speaking. Part of the VibeWare initiative."
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">

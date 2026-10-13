@@ -3,7 +3,7 @@
 # Project: VoiceDucker
 # Repository: https://github.com/umbertotechnopreneur/VoiceDucker
 # Creator: Umberto Giacobbi | https://umbertogiacobbi.biz
-# VibeWare: Human intent. AI implementation. Accountable human review.
+# VibeWare: Human intent, AI execution, and plenty of tokens
 # Manifesto: https://umbertogiacobbi.biz/vibeware/manifesto
 # Created with AI: See file history for implementation provenance.
 # Modified with AI: OpenAI Codex; source attribution and release preparation, 2026-10-09.
@@ -39,6 +39,39 @@ function New-SizedPng([string]$sourcePath, [int]$size) {
                 $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
                 $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
                 $graphics.DrawImage($source, 0, 0, $size, $size)
+            }
+            finally { $graphics.Dispose() }
+            $stream = [System.IO.MemoryStream]::new()
+            try {
+                $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+                return $stream.ToArray()
+            }
+            finally { $stream.Dispose() }
+        }
+        finally { $bitmap.Dispose() }
+    }
+    finally { $source.Dispose() }
+}
+
+function New-FittedPng([string]$sourcePath, [int]$width, [int]$height) {
+    $source = [System.Drawing.Bitmap]::new($sourcePath)
+    try {
+        $bitmap = [System.Drawing.Bitmap]::new($width, $height)
+        try {
+            $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+            try {
+                # Keep the approved artwork's proportions; extend its navy background.
+                $graphics.Clear($source.GetPixel(0, 0))
+                $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+                $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+                $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+                $scale = [Math]::Min($width / $source.Width, $height / $source.Height)
+                $drawWidth = [int][Math]::Round($source.Width * $scale)
+                $drawHeight = [int][Math]::Round($source.Height * $scale)
+                $left = [int][Math]::Floor(($width - $drawWidth) / 2)
+                $top = [int][Math]::Floor(($height - $drawHeight) / 2)
+                $graphics.DrawImage($source, $left, $top, $drawWidth, $drawHeight)
             }
             finally { $graphics.Dispose() }
             $stream = [System.IO.MemoryStream]::new()
@@ -92,12 +125,21 @@ $targets = @(
     @{ Name = 'Square44x44Logo.targetsize-48_altform-lightunplated.png'; Size = 48; Simple = $false },
     @{ Name = 'Square44x44Logo.scale-200.png'; Size = 88; Simple = $false },
     @{ Name = 'Square150x150Logo.scale-200.png'; Size = 300; Simple = $false },
+    @{ Name = 'LockScreenLogo.scale-200.png'; Size = 48; Simple = $true },
     @{ Name = 'StoreLogo.png'; Size = 50; Simple = $false }
 )
 foreach ($target in $targets) {
     $source = if ($target.Simple) { $simplePath } else { $detailedPath }
     [System.IO.File]::WriteAllBytes(
         (Join-Path $assets $target.Name), (New-SizedPng $source $target.Size))
+}
+
+foreach ($target in @(
+        @{ Name = 'Wide310x150Logo.scale-200.png'; Width = 620; Height = 300 },
+        @{ Name = 'SplashScreen.scale-200.png'; Width = 1240; Height = 600 })) {
+    [System.IO.File]::WriteAllBytes(
+        (Join-Path $assets $target.Name),
+        (New-FittedPng $detailedPath $target.Width $target.Height))
 }
 
 Write-Host "Adaptive icon and tile assets generated in $assets"

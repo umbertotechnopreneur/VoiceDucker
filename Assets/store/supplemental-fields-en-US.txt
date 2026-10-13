@@ -1,0 +1,26 @@
+SHORT TITLE
+VoiceDucker
+
+VOICE TITLE
+Voice Ducker
+
+SHORT DESCRIPTION
+Keep your music on. When you speak, VoiceDucker turns it down. When you're done, it gently comes back. Handy for calls, chats with digital assistants, and videos playing in the background.
+
+KEYWORDS (enter each separately)
+audio ducking
+microphone
+music volume
+voice control
+video calls
+digital assistants
+background audio
+
+COPYRIGHT AND TRADEMARK INFO
+Copyright (c) 2026 Umberto Giacobbi.
+
+ADDITIONAL LICENSE TERMS
+https://github.com/umbertotechnopreneur/VoiceDucker/blob/main/LICENSE
+
+DEVELOPED BY
+Umberto Giacobbi

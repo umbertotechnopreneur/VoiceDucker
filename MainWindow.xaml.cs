@@ -3,7 +3,7 @@
  * Repository: https://github.com/umbertotechnopreneur/VoiceDucker
  * Manifesto: https://umbertogiacobbi.biz/vibeware/manifesto
  * Creator: Umberto Giacobbi | https://umbertogiacobbi.biz
- * VibeWare initiative: Human intent. AI implementation. Accountable human review.
+ * VibeWare initiative: Human intent, AI execution, and plenty of tokens
  * Created with AI: OpenAI Codex assisted the initial implementation; Git history
  * Modified with AI: OpenAI Codex; audio settings, reactive mixer, tray and About, 2026-10-08
  * Human guidance: Umberto Giacobbi defined the purpose and audio behavior

@@ -2,7 +2,7 @@
 # Project: VoiceDucker
 # Repository: https://github.com/umbertotechnopreneur/VoiceDucker
 # Creator: Umberto Giacobbi | https://umbertogiacobbi.biz
-# VibeWare: Human intent. AI implementation. Accountable human review.
+# VibeWare: Human intent, AI execution, and plenty of tokens
 # Manifesto: https://umbertogiacobbi.biz/vibeware/manifesto
 # Created with AI: OpenAI Codex; restored dependency notice collection, 2026-10-09.
 # Human guidance: Umberto Giacobbi requested public distribution.

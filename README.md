@@ -8,8 +8,6 @@ I talk to AI while Spotify keeps me company. Windows' **Communications** setting
 
 I press **Enable** when I want it to listen to my microphone. When I speak, it lowers Spotify; I can choose other playing apps too. When I stop, it fades them back to the volume I chose. My voice stays in memory: no recordings, transcription, or uploads.
 
-VoiceDucker is a **native Windows desktop app built with WinUI 3**, the same UI framework we use for our newer Windows apps. We pay close attention to **RAM usage, performance, and disk footprint**. There is always room to improve, and we keep working on optimizations.
-
 Created by [Umberto Giacobbi](https://umbertogiacobbi.biz), shared under the [MIT license](LICENSE).
 
 ## Download and play
@@ -23,17 +21,9 @@ On **Windows 11**, extract the whole ZIP into a folder you can write to, then op
 
 The ZIP is portable and unsigned. Windows may show a security prompt. There is no MSIX installation or signing certificate to import for this download.
 
-## See it in action
+## Screenshot
 
-<p align="center">
-  <a href="docs/screenshots/screenshot-board.png">
-    <img src="docs/screenshots/screenshot-board.png" alt="VoiceDucker native Windows UI and advanced settings: live green microphone level, sensitivity, microphone selection, and pause and fade controls" width="1100">
-  </a>
-</p>
-
-<p align="center">
-  New UI and settings · <a href="docs/screenshots/voice-ducker-live.png">Open UI screenshot</a> · <a href="docs/screenshots/voice-ducker-settings.png">Open settings screenshot</a>
-</p>
+<img src="docs/screenshots/main-window.png" alt="VoiceDucker with the microphone off and advanced options collapsed" width="480">
 
 ## My defaults
 
@@ -56,8 +46,7 @@ not change the Windows microphone volume or the input used by other apps.
 Any sound above the resulting detection threshold can lower playback.
 
 **Reset** next to Sensitivity returns microphone gain to 0 dB. The microphone
-level meter uses a thick green bar, shows the live post-gain signal from -60 to
-0 dBFS, and marks the detection
+level meter uses a thick green bar, shows the live post-gain signal from -60 to 0 dBFS, and marks the detection
 threshold at about -35 dBFS, so adjusting sensitivity has a visible reference.
 The meter labels whether the current sound is above or below the threshold.
 While the microphone is off, it prompts me to press Enable to see the level.
@@ -113,14 +102,18 @@ alias to launch the installed app. The portable build uses the stable path
 
 ---
 
-<a href="https://umbertogiacobbi.biz/vibeware/manifesto">
-  <img align="right" src="https://raw.githubusercontent.com/umbertotechnopreneur/VibeWare/main/Branding/vibeware-logo.png" alt="VibeWare floppy logo" width="180">
-</a>
+<p align="right">
+  <a href="https://umbertogiacobbi.biz/vibeware/manifesto">
+    <img src="https://raw.githubusercontent.com/umbertotechnopreneur/VibeWare/main/Branding/vibeware-logo.png" alt="VibeWare floppy logo" width="160">
+  </a><br>
+  <strong>VibeWare</strong><br>
+  <em>Human intent, AI execution, and plenty of tokens</em>
+</p>
 
-### This is VibeWare
+### What is VibeWare?
 
-VibeWare is a term coined by [Umberto Giacobbi](https://umbertogiacobbi.biz) and an open initiative for developers who build with AI and care about the craft. It challenges the assumption that vibe coding is synonymous with low-quality code. It openly acknowledges the weaknesses and risks of AI-generated software: experienced developers must guide the process, test carefully, check security and take responsibility for the result. A VibeWare footer simply says: this software was developed with AI, and it deserves to be judged by the quality of the work.
+I coined the term [VibeWare](https://umbertogiacobbi.biz) and started an open initiative for developers who build with AI and care about the craft. I challenge the assumption that vibe coding is synonymous with low-quality code, while openly acknowledging the weaknesses and risks of AI-generated software: experienced developers must guide the process, test carefully, check security and take responsibility for the result. With this footer, I acknowledge that I developed this software with AI and ask you to judge the quality of the work.
 
-[Read the VibeWare manifesto](https://umbertogiacobbi.biz/vibeware/manifesto)
+[**Read the VibeWare manifesto**](https://umbertogiacobbi.biz/vibeware/manifesto)
 
 *You are welcome to explore, adapt and reuse the open-source VibeWare materials under the project license — my contribution to the developer community.*

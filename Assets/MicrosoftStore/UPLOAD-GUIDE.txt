@@ -1,0 +1,41 @@
+VoiceDucker Microsoft Store listing assets
+
+SCREENSHOTS - Desktop section, in this order
+01-main-1440x2560.png: main window, Advanced options collapsed, microphone off.
+02-settings-1440x2560.png: Advanced options open and scrolled into view.
+03-about-1440x2560.png: About, version, VibeWare disclosure and links.
+04-playback-1440x2560.png: detail of the user's real Spotify AUDIO LOWERING capture.
+All four final files: portrait PNG, 1440 x 2560 pixels, below 50 MB.
+Captions are in Store-copy-en-US.txt.
+
+STORE IMAGES
+app-tile-300.png: 1:1 app tile icon, 300 x 300.
+app-tile-150.png: additional 1:1 icon, 150 x 150, if this field is offered.
+app-tile-71.png: additional 1:1 icon, 71 x 71, if this field is offered.
+The 300-pixel app tile is copied unchanged from the app's existing asset; smaller files are size derivatives.
+
+TRAILERS AND ADDITIONAL ASSETS - Windows and Xbox image section
+hero-1920x1080.png: 16:9 hero artwork, 1920 x 1080.
+It deliberately contains no product title, marketing text or app UI.
+Xbox-only and game poster/box art fields do not apply to this Windows desktop utility.
+
+TEXT
+Store-copy-en-US.txt: description, short description, individual features, keywords, developer/copyright, captions and links.
+What's new: leave blank for this first Store submission.
+The listing can be translated; the current app interface is English.
+
+PRODUCTION NOTES
+The supplied blue-purple background and genuine app screenshots were the references for image_gen built-in compositing.
+Main/settings/About reference captures are from the installed 1.0.11.0 local app.
+The playback detail is from the user's earlier genuine capture; the crop excludes the superseded header/motto.
+No Store trial/license state was invented for the screenshots.
+Native generator outputs are retained under sources/generated-native. Export-StoreSizes.ps1 performs final size conversion only.
+The original generated outputs were 941 x 1672 (portrait) and 1672 x 941 (hero); final PNGs are resized exports, not additional native-resolution detail.
+Creative edits used the built-in image_gen tool. The prompt set is in imagegen-prompts.txt.
+Review the final files at full size before submitting. The raw captures and exports remain available for comparison.
+
+MICROSOFT REQUIREMENTS
+Desktop screenshots: PNG, landscape or portrait, 1366 x 768 or larger; maximum 50 MB per image.
+Hero: 1920 x 1080 or 3840 x 2160, without text and without app UI.
+App tile icon: 300 x 300 recommended.
+https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/screenshots-and-images

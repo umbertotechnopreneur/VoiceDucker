@@ -3,7 +3,7 @@
   Project: VoiceDucker
   Repository: https://github.com/umbertotechnopreneur/VoiceDucker
   Creator: Umberto Giacobbi | https://umbertogiacobbi.biz
-  VibeWare: Human intent. AI implementation. Accountable human review.
+  VibeWare: Human intent, AI execution, and plenty of tokens
   Manifesto: https://umbertogiacobbi.biz/vibeware/manifesto
   Created with AI: See file history for implementation provenance.
   Modified with AI: OpenAI Codex; source attribution and release preparation, 2026-10-09.
@@ -35,20 +35,36 @@ VBWR E -->
             </StackPanel>
             <TextBlock Text="Music steps back while you speak, then smoothly returns."
                        TextWrapping="Wrap" TextAlignment="Center" />
-            <Border Background="#263B50" CornerRadius="10" Padding="14">
-                <StackPanel Spacing="5">
-                    <TextBlock Text="Part of VibeWare" FontWeight="SemiBold" />
+            <Border Background="#263B50" RequestedTheme="Dark" CornerRadius="10" Padding="14">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Part of VibeWare" FontWeight="SemiBold"
+                               Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                     <TextBlock Text="Created by Umberto Giacobbi. Built with AI assistance and accountable human review."
-                               TextWrapping="Wrap" FontSize="12" />
+                               TextWrapping="Wrap" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <HyperlinkButton Content="Read the VibeWare MANIFESTO ↗"
+                                     NavigateUri="https://umbertogiacobbi.biz/vibeware/manifesto"
+                                     HorizontalAlignment="Left" Padding="0" FontSize="13" />
                 </StackPanel>
             </Border>
-            <StackPanel Spacing="4">
+            <Grid ColumnSpacing="16" RowSpacing="4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
                 <HyperlinkButton Content="VoiceDucker on GitHub ↗"
-                                 NavigateUri="https://github.com/umbertotechnopreneur/VoiceDucker" />
-                <HyperlinkButton Content="VibeWare on GitHub ↗"
-                                 NavigateUri="https://github.com/umbertotechnopreneur/VibeWare" />
-            </StackPanel>
-            <Button Content="Close" HorizontalAlignment="Right" Click="Close_Click" />
+                                 NavigateUri="https://github.com/umbertotechnopreneur/VoiceDucker"
+                                 HorizontalAlignment="Left" Padding="0" FontSize="13" />
+                <HyperlinkButton Grid.Row="1" Content="VibeWare on GitHub ↗"
+                                 NavigateUri="https://github.com/umbertotechnopreneur/VibeWare"
+                                 HorizontalAlignment="Left" Padding="0" FontSize="13" />
+                <Button Grid.Column="1" Grid.RowSpan="2" Content="Close"
+                        HorizontalAlignment="Right" VerticalAlignment="Bottom" Click="Close_Click" />
+            </Grid>
         </StackPanel>
     </ScrollViewer>
 </Window>

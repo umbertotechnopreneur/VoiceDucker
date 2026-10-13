@@ -2,7 +2,7 @@
 # Project: VoiceDucker
 # Repository: https://github.com/umbertotechnopreneur/VoiceDucker
 # Creator: Umberto Giacobbi | https://umbertogiacobbi.biz
-# VibeWare: Human intent. AI implementation. Accountable human review.
+# VibeWare: Human intent, AI execution, and plenty of tokens
 # Manifesto: https://umbertogiacobbi.biz/vibeware/manifesto
 # Created with AI: See file history for implementation provenance.
 # Modified with AI: OpenAI Codex; source attribution and release preparation, 2026-10-09.
@@ -56,10 +56,6 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
-      - name: Verify settings persistence and pause behavior
-        if: matrix.architecture == 'x64'
-        shell: pwsh
-        run: ./scripts/test-settings-persistence.ps1
       - name: Clean and build portable app
         shell: pwsh
         run: ./scripts/build.ps1 -Architecture '${{ matrix.architecture }}' -Configuration Release

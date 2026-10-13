@@ -1,0 +1,62 @@
+DESCRIPTION
+
+You talk. The music turns down. You stop. It comes back. That's VoiceDucker.
+
+VoiceDucker is a paid app with a 30-day trial. To continue using it after the trial ends, purchase VoiceDucker through Microsoft Store at the price shown in the Store.
+
+Talking to an AI assistant? On a call? Watching a video while music keeps you company? You shouldn't need to grab the volume slider every time you open your mouth. VoiceDucker gives your voice a little room.
+
+Put some audio on, pick your microphone, and press Enable. Spotify is included by default. Switch on "Also lower other apps" for other players and browsers. When the microphone picks up sound, their audio gets quieter. When things go quiet, it gently comes back. Your soundtrack stays. It just learns some manners.
+
+Choose how much the volume drops, how smoothly it fades, and how long it waits through little pauses. The green microphone meter helps you adjust sensitivity.
+
+Your microphone starts off. Audio stays on your device, in memory: no recordings, transcription, or uploads.
+
+A native Windows 11 app built with WinUI 3, with ongoing attention to RAM, performance, and disk space.
+
+SHORT DESCRIPTION
+
+Keep your music on. VoiceDucker turns it down when you speak and gently brings it back when you're done. Handy for calls, AI chats, and other audio playing in the background.
+
+PRODUCT FEATURES (one per field)
+
+Talk without chasing the volume slider.
+Spotify by default; include other playing apps when you want.
+Choose your microphone and see its live level.
+Adjust sensitivity, volume reduction, and smooth fades.
+Keep audio quiet through little pauses.
+Microphone off at startup. Audio stays on your device.
+Native Windows 11 app, built with WinUI 3.
+
+KEYWORDS (one per keyword, seven total)
+
+audio ducking
+volume control
+microphone
+Spotify
+background music
+voice assistant
+calls
+
+SHORT TITLE
+VoiceDucker
+
+DEVELOPED BY
+Umberto Giacobbi
+
+COPYRIGHT
+Copyright (c) 2026 Umberto Giacobbi.
+
+WHAT'S NEW IN THIS VERSION
+Leave blank for this first Store submission.
+
+SCREENSHOT CAPTIONS
+1. Ready when you are. The microphone starts off; press Enable to make room for your voice.
+2. Your microphone, your timing, your amount of quiet. Fine-tune sensitivity and fades in Advanced options.
+3. Meet VoiceDucker and VibeWare: useful software I created with AI assistance, under my direction and responsibility.
+4. You talk. Spotify steps back. The green microphone meter shows the sound that triggers the volume drop.
+
+SUPPORTING LINKS
+Privacy: https://umbertogiacobbi.biz/privacy/
+Terms: https://umbertogiacobbi.biz/terms/
+Manifesto: https://umbertogiacobbi.biz/vibeware/manifesto
