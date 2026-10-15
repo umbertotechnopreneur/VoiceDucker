@@ -21,9 +21,168 @@ VBWR E -->
         <DesktopAcrylicBackdrop />
     </Window.SystemBackdrop>
 
+    <SplitView x:Name="SettingsSplitView" PanePlacement="Right" DisplayMode="Inline"
+               OpenPaneLength="520" IsPaneOpen="False">
+        <SplitView.Pane>
+            <Border BorderThickness="1,0,0,0" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel x:Name="SettingsPanel" Padding="12" Spacing="4">
+                        <TextBlock Text="Settings" FontSize="20" FontWeight="SemiBold" Margin="4,4,0,8" />
+                        <StackPanel Margin="4,0,4,12" Spacing="2">
+                            <TextBlock Text="Need help with the parameters?" FontSize="13" TextWrapping="Wrap" />
+                            <HyperlinkButton x:Name="SettingsHelpLink" Content="Visit our online tutorial and parameter guide."
+                                             NavigateUri="https://umbertogiacobbi.biz/voiceducker/guide/?utm_source=voiceducker&amp;utm_medium=referral&amp;utm_campaign=in_app_help&amp;utm_content=settings_parameters"
+                                             HorizontalAlignment="Left" Padding="0" MinHeight="0" FontSize="13"
+                                             AutomationProperties.Name="Open the online VoiceDucker parameter guide" />
+                        </StackPanel>
+            <Expander x:Name="DetectionExpander" Header="Microphone &amp; detection"
+                      IsExpanded="False" MinHeight="40" Padding="12" HorizontalAlignment="Stretch"
+                      HorizontalContentAlignment="Stretch"
+                      Expanding="SettingsExpander_Expanding">
+                <StackPanel Spacing="16">
+                    <StackPanel Spacing="8">
+                        <Grid ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Sensitivity" VerticalAlignment="Center" />
+                            <TextBlock x:Name="SensitivityValueText" Grid.Column="1" Text="0 dB"
+                                       VerticalAlignment="Center" FontFamily="Consolas" />
+                            <Button Grid.Column="2" Content="Reset" Click="SensitivityReset_Click"
+                                    Padding="10,4" AutomationProperties.Name="Reset sensitivity to zero decibels" />
+                        </Grid>
+                        <Slider x:Name="SensitivitySlider" Minimum="-24" Maximum="36"
+                                StepFrequency="1" HorizontalAlignment="Stretch"
+                                ValueChanged="SensitivitySlider_ValueChanged"
+                                AutomationProperties.Name="Microphone sensitivity in decibels">
+                            <Slider.Resources>
+                                <SolidColorBrush x:Key="SliderTrackValueFill" Color="#7AD66D" />
+                                <SolidColorBrush x:Key="SliderTrackValueFillPointerOver" Color="#94E889" />
+                                <SolidColorBrush x:Key="SliderTrackValueFillPressed" Color="#62BC57" />
+                                <SolidColorBrush x:Key="SliderThumbBackground" Color="#7AD66D" />
+                                <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="#94E889" />
+                                <SolidColorBrush x:Key="SliderThumbBackgroundPressed" Color="#62BC57" />
+                            </Slider.Resources>
+                        </Slider>
+                        <TextBlock Text="Microphone gain after capture: more dB detects quieter sounds. Applies only to VoiceDucker."
+                                   TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
+                    </StackPanel>
+                    <StackPanel Spacing="8">
+                        <Grid ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Detection threshold" VerticalAlignment="Center" />
+                            <TextBlock x:Name="ThresholdValueText" Grid.Column="1" Text="-34.9 dBFS"
+                                       VerticalAlignment="Center" FontFamily="Consolas" />
+                            <Button Grid.Column="2" Content="Reset" Click="ThresholdReset_Click"
+                                    Padding="10,4" AutomationProperties.Name="Reset detection threshold to minus 34.9 dBFS" />
+                        </Grid>
+                        <Slider x:Name="ThresholdSlider" Minimum="-60" Maximum="0" Value="-34.9"
+                                StepFrequency="0.1" HorizontalAlignment="Stretch"
+                                ValueChanged="ThresholdSlider_ValueChanged"
+                                AutomationProperties.Name="Detection threshold in dBFS" />
+                        <TextBlock Text="Lower values detect quieter sounds; higher values require louder sounds. The microphone meter marks this threshold after Sensitivity gain."
+                                   TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
+                    </StackPanel>
+                    <StackPanel Spacing="8">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="130" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Hysteresis (dB)" VerticalAlignment="Center" />
+                            <NumberBox x:Name="HysteresisBox" Grid.Column="1" Minimum="0" Maximum="12"
+                                       SmallChange="1" SpinButtonPlacementMode="Compact"
+                                       Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged"
+                                       AutomationProperties.Name="Detection hysteresis in decibels" />
+                        </Grid>
+                        <TextBlock Text="Keeps detection active through small dips below the threshold. Default: 6 dB; set 0 to disable."
+                                   TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
+                        <TextBlock x:Name="ReleaseThresholdText" TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
+                    </StackPanel>
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Microphone" />
+                        <ComboBox x:Name="MicrophoneComboBox" HorizontalAlignment="Stretch"
+                                  DisplayMemberPath="Name" SelectionChanged="MicrophoneComboBox_SelectionChanged"
+                                  DropDownOpened="MicrophoneComboBox_DropDownOpened"
+                                  AutomationProperties.Name="Choose microphone" />
+                    </StackPanel>
+                </StackPanel>
+            </Expander>
+
+            <Expander x:Name="VolumeExpander" Header="Volume &amp; timing"
+                      IsExpanded="False" MinHeight="40" Padding="12" HorizontalAlignment="Stretch"
+                      HorizontalContentAlignment="Stretch"
+                      Expanding="SettingsExpander_Expanding">
+                <StackPanel Spacing="16">
+                    <StackPanel Spacing="8">
+                        <Grid ColumnSpacing="12" RowSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="130" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="Reduce volume by (%)" VerticalAlignment="Center" />
+                            <NumberBox x:Name="ReductionBox" Grid.Column="1" Minimum="0" Maximum="100"
+                                       SmallChange="1" SpinButtonPlacementMode="Compact"
+                                       Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged" />
+                            <TextBlock Grid.Row="1" Text="Fade down (ms)" VerticalAlignment="Center" />
+                            <NumberBox x:Name="FadeDownBox" Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="5000"
+                                       SmallChange="100" SpinButtonPlacementMode="Compact"
+                                       Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged" />
+                            <TextBlock Grid.Row="2" Text="Wait before fade back (ms)" VerticalAlignment="Center" />
+                            <NumberBox x:Name="RestoreDelayBox" Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="10000"
+                                       SmallChange="100" SpinButtonPlacementMode="Compact"
+                                       Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged" />
+                            <TextBlock Grid.Row="3" Text="Fade back (ms)" VerticalAlignment="Center" />
+                            <NumberBox x:Name="FadeUpBox" Grid.Row="3" Grid.Column="1" Minimum="0" Maximum="30000"
+                                       SmallChange="100" SpinButtonPlacementMode="Compact"
+                                       Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged" />
+                        </Grid>
+                        <TextBlock Text="Wait keeps music quiet through short pauses. Fade back is the time to return to the previous volume."
+                                   TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
+                    </StackPanel>
+                </StackPanel>
+            </Expander>
+
+            <Expander x:Name="AppsExpander" Header="Apps &amp; startup"
+                      IsExpanded="False" MinHeight="40" Padding="12" HorizontalAlignment="Stretch"
+                      HorizontalContentAlignment="Stretch"
+                      Expanding="SettingsExpander_Expanding">
+                <StackPanel Spacing="16">
+                    <StackPanel Spacing="8">
+                        <CheckBox x:Name="OtherSourcesCheckBox" Content="Also lower other apps"
+                                  Click="OtherSourcesCheckBox_Click" />
+                        <Button x:Name="HiddenAppsButton" Content="Hidden apps" Visibility="Collapsed" />
+                    </StackPanel>
+                    <CheckBox x:Name="StartupCheckBox" Content="Start with Windows (opens with mic off)"
+                              Click="StartupCheckBox_Click" />
+                </StackPanel>
+            </Expander>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </SplitView.Pane>
     <ScrollViewer VerticalScrollBarVisibility="Auto">
+
         <StackPanel x:Name="RootPanel" Padding="22" Spacing="16">
-            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+            <Grid ColumnSpacing="12" VerticalAlignment="Center">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
                 <Border x:Name="MicStatusBorder" Width="42" Height="42" Background="#263B50"
                         BorderBrush="#F6A24C" BorderThickness="1" CornerRadius="2">
                     <Grid>
@@ -31,12 +190,24 @@ VBWR E -->
                                   FontSize="22" Foreground="#F6A24C" />
                     </Grid>
                 </Border>
-                <StackPanel VerticalAlignment="Center" Spacing="2">
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                     <TextBlock Text="VoiceDucker" FontFamily="Consolas" FontSize="23"
                                FontWeight="Bold" CharacterSpacing="70" />
-                    <TextBlock Text="Your audio, quieter when you speak" FontSize="13" Opacity="0.72" />
+                    <TextBlock Text="Your audio, quieter when you speak" FontSize="13" Opacity="0.72"
+                               TextWrapping="Wrap" />
                 </StackPanel>
-            </StackPanel>
+                <HyperlinkButton Grid.Column="2" Padding="0" VerticalAlignment="Center"
+                                 NavigateUri="https://umbertogiacobbi.biz/vibeware/manifesto"
+                                 AutomationProperties.Name="Participates in VibeWare. Read the manifesto"
+                                 ToolTipService.ToolTip="Participates in VibeWare · Read the manifesto">
+                    <Image Source="Assets/vibeware-logo.png" Width="52" Height="52" Stretch="Uniform" />
+                </HyperlinkButton>
+                <ToggleButton x:Name="SettingsButton" Grid.Column="3" Click="SettingsButton_Click"
+                              VerticalAlignment="Center" AutomationProperties.Name="Settings"
+                              ToolTipService.ToolTip="Settings">
+                    <FontIcon Glyph="&#xE713;" FontFamily="Segoe Fluent Icons" FontSize="20" />
+                </ToggleButton>
+            </Grid>
 
             <Grid ColumnSpacing="14">
                 <Grid.ColumnDefinitions>
@@ -109,6 +280,7 @@ VBWR E -->
                 <Grid>
                     <TextBlock Text="-60" FontFamily="Consolas" FontSize="11" Opacity="0.65" />
                     <TextBlock x:Name="MicrophoneThresholdText" Text="Threshold -34.9 dBFS"
+                               ToolTipService.ToolTip="Adjust Detection threshold in Microphone &amp; detection"
                                HorizontalAlignment="Center" FontFamily="Consolas" FontSize="11" Opacity="0.8" />
                     <TextBlock Text="0 dBFS" HorizontalAlignment="Right" FontFamily="Consolas"
                                FontSize="11" Opacity="0.65" />
@@ -136,91 +308,6 @@ VBWR E -->
                            FontSize="12" Opacity="0.68" />
             </StackPanel>
 
-            <Expander x:Name="AdvancedOptionsExpander" Header="Advanced options"
-                      IsExpanded="False" HorizontalAlignment="Stretch"
-                      HorizontalContentAlignment="Stretch"
-                      SizeChanged="AdvancedOptionsExpander_SizeChanged">
-                <StackPanel Spacing="16">
-                    <StackPanel Spacing="8">
-                        <Grid ColumnSpacing="10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Sensitivity" VerticalAlignment="Center" />
-                            <TextBlock x:Name="SensitivityValueText" Grid.Column="1" Text="0 dB"
-                                       VerticalAlignment="Center" FontFamily="Consolas" />
-                            <Button Grid.Column="2" Content="Reset" Click="SensitivityReset_Click"
-                                    Padding="10,4" AutomationProperties.Name="Reset sensitivity to zero decibels" />
-                        </Grid>
-                        <Slider x:Name="SensitivitySlider" Minimum="-24" Maximum="36"
-                                StepFrequency="1" HorizontalAlignment="Stretch"
-                                ValueChanged="SensitivitySlider_ValueChanged"
-                                AutomationProperties.Name="Microphone sensitivity in decibels">
-                            <Slider.Resources>
-                                <SolidColorBrush x:Key="SliderTrackValueFill" Color="#7AD66D" />
-                                <SolidColorBrush x:Key="SliderTrackValueFillPointerOver" Color="#94E889" />
-                                <SolidColorBrush x:Key="SliderTrackValueFillPressed" Color="#62BC57" />
-                                <SolidColorBrush x:Key="SliderThumbBackground" Color="#7AD66D" />
-                                <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="#94E889" />
-                                <SolidColorBrush x:Key="SliderThumbBackgroundPressed" Color="#62BC57" />
-                            </Slider.Resources>
-                        </Slider>
-                        <TextBlock Text="Microphone gain after capture: more dB detects quieter sounds. Applies only to VoiceDucker."
-                                   TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
-                    </StackPanel>
-                    <StackPanel Spacing="8">
-                        <TextBlock Text="Microphone" />
-                        <ComboBox x:Name="MicrophoneComboBox" HorizontalAlignment="Stretch"
-                                  DisplayMemberPath="Name" SelectionChanged="MicrophoneComboBox_SelectionChanged"
-                                  DropDownOpened="MicrophoneComboBox_DropDownOpened"
-                                  AutomationProperties.Name="Choose microphone" />
-                    </StackPanel>
-                    <StackPanel Spacing="8">
-                        <TextBlock Text="AUDIO SETTINGS" FontFamily="Consolas" FontWeight="SemiBold" />
-                        <Grid ColumnSpacing="12" RowSpacing="8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="130" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <TextBlock Text="Reduce volume by (%)" VerticalAlignment="Center" />
-                            <NumberBox x:Name="ReductionBox" Grid.Column="1" Minimum="0" Maximum="100"
-                                       SmallChange="1" SpinButtonPlacementMode="Compact"
-                                       Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged" />
-                            <TextBlock Grid.Row="1" Text="Fade down (ms)" VerticalAlignment="Center" />
-                            <NumberBox x:Name="FadeDownBox" Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="5000"
-                                       SmallChange="100" SpinButtonPlacementMode="Compact"
-                                       Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged" />
-                            <TextBlock Grid.Row="2" Text="Wait before fade back (ms)" VerticalAlignment="Center" />
-                            <NumberBox x:Name="RestoreDelayBox" Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="10000"
-                                       SmallChange="100" SpinButtonPlacementMode="Compact"
-                                       Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged" />
-                            <TextBlock Grid.Row="3" Text="Fade back (ms)" VerticalAlignment="Center" />
-                            <NumberBox x:Name="FadeUpBox" Grid.Row="3" Grid.Column="1" Minimum="0" Maximum="30000"
-                                       SmallChange="100" SpinButtonPlacementMode="Compact"
-                                       Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged" />
-                        </Grid>
-                        <TextBlock Text="Wait keeps music quiet through short pauses. Fade back is the time to return to the previous volume."
-                                   TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
-                        <CheckBox x:Name="StartupCheckBox" Content="Start with Windows (opens with mic off)"
-                                  Click="StartupCheckBox_Click" />
-                    </StackPanel>
-
-                    <StackPanel Spacing="8">
-                        <CheckBox x:Name="OtherSourcesCheckBox" Content="Also lower other apps"
-                                  Click="OtherSourcesCheckBox_Click" />
-                        <Button x:Name="HiddenAppsButton" Content="Hidden apps" Visibility="Collapsed" />
-                    </StackPanel>
-                </StackPanel>
-            </Expander>
-
             <TextBlock x:Name="FeedbackText" TextWrapping="Wrap" FontSize="12" />
 
             <Grid ColumnSpacing="16">
@@ -232,10 +319,10 @@ VBWR E -->
                         VerticalAlignment="Center" />
                 <StackPanel Grid.Column="1" HorizontalAlignment="Right"
                             VerticalAlignment="Center" Spacing="2">
-                    <TextBlock Text="Part of the VibeWare initiative"
+                    <TextBlock Text="Participates in the VibeWare initiative"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                TextWrapping="Wrap" TextAlignment="Right" FontSize="12" />
-                    <HyperlinkButton Content="MANIFESTO ↗"
+                    <HyperlinkButton Content="MANIFESTO"
                                      NavigateUri="https://umbertogiacobbi.biz/vibeware/manifesto"
                                      HorizontalAlignment="Right" Padding="0" FontSize="12"
                                      AutomationProperties.Name="Read the VibeWare manifesto" />
@@ -243,4 +330,5 @@ VBWR E -->
             </Grid>
         </StackPanel>
     </ScrollViewer>
+    </SplitView>
 </Window>

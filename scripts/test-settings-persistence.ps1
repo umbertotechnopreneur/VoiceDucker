@@ -43,7 +43,8 @@ var path = Path.Combine(AppContext.BaseDirectory, "isolated-settings", args[1], 
 var expected = new DuckingSettings(73, 450, 12300, true)
     {
         BlacklistedProcesses = ["Spotify", "FluentFlyout"], MicrophoneGainDecibels = 27,
-        MicrophoneDeviceId = "isolated-test-microphone", RestoreDelayMilliseconds = 1750
+        MicrophoneDeviceId = "isolated-test-microphone", RestoreDelayMilliseconds = 1750,
+        ThresholdDecibels = -47.3, HysteresisDecibels = 9
     };
 if (args is ["write-and-kill", _])
 {
@@ -85,6 +86,13 @@ foreach (var invalid in new[]
 {
     expected with { RestoreDelayMilliseconds = -1 },
     expected with { RestoreDelayMilliseconds = 10001 },
+    expected with { ThresholdDecibels = -60.1 },
+    expected with { HysteresisDecibels = -1 },
+    expected with { HysteresisDecibels = 13 },
+    expected with { ThresholdDecibels = 0.1 },
+    expected with { ThresholdDecibels = double.NaN },
+    expected with { ThresholdDecibels = double.PositiveInfinity },
+    expected with { ThresholdDecibels = double.NegativeInfinity },
     expected with { MicrophoneDeviceId = null! }
 })
 {
@@ -107,6 +115,13 @@ foreach (var delay in new[] { 0, 10000 })
 }
 
 var replacement = new DuckingSettings(0, 5000, 30000, false);
+foreach (var threshold in new[] { -60.0, 0.0 })
+{
+    var boundary = expected with { ThresholdDecibels = threshold };
+    SettingsStore.Save(boundary, path);
+    Check(SameSettings(SettingsStore.Load(path, out error), boundary) && error is null,
+        "A threshold boundary did not survive saving and reloading.");
+}
 SettingsStore.Save(replacement, path);
 Check(SameSettings(SettingsStore.Load(path, out error), replacement) && error is null,
     "An immediate replacement did not persist all settings.");
@@ -120,6 +135,9 @@ Check(SameSettings(SettingsStore.Load(path, out error), new DuckingSettings(42, 
 var legacy = SettingsStore.Load(path, out error);
 Check(legacy.MicrophoneDeviceId == "" && legacy.RestoreDelayMilliseconds == 650,
     "Legacy settings did not retain the communications microphone and 650 ms pause defaults.");
+Check(Math.Abs(legacy.GetThresholdAmplitude() - 0.018) < 1e-15,
+    "Legacy settings changed the original detection threshold.");
+Check(legacy.HysteresisDecibels == 6, "Existing settings did not gain the default hysteresis gap.");
 
 File.WriteAllText(path, "invalid JSON");
 Check(SameSettings(SettingsStore.Load(path, out error), new DuckingSettings()) && error is not null,
@@ -138,7 +156,9 @@ foreach (var invalidAudioSettings in new[]
 {
     "{\"MicrophoneDeviceId\":null}",
     "{\"RestoreDelayMilliseconds\":-1}",
-    "{\"RestoreDelayMilliseconds\":10001}"
+    "{\"RestoreDelayMilliseconds\":10001}",
+    "{\"ThresholdDecibels\":-60.1}",
+    "{\"ThresholdDecibels\":0.1}"
 })
 {
     File.WriteAllText(path, invalidAudioSettings);
@@ -163,33 +183,33 @@ var gate = new VoiceGate(() => now) { HoldMilliseconds = 650 };
 Check(!gate.IsSpeaking, "A quiet startup incorrectly lowered playback.");
 gate.Observe(0);
 Check(!gate.IsSpeaking, "Silence incorrectly opened the sound gate.");
-gate.Observe(VoiceGate.Threshold);
+gate.Observe(gate.Threshold);
 Check(gate.IsSpeaking, "Sound at the threshold did not open the sound gate.");
 now += 649;
-gate.Observe(VoiceGate.Threshold / 2);
+gate.Observe(gate.Threshold / 2);
 Check(gate.IsSpeaking, "A brief pause was not held.");
 now += 2;
 Check(!gate.IsSpeaking, "Playback remained held after the pause deadline.");
-gate.Observe(VoiceGate.Threshold * 2);
+gate.Observe(gate.Threshold * 2);
 now += 500;
-gate.Observe(VoiceGate.Threshold);
+gate.Observe(gate.Threshold);
 gate.Observe(0);
 now += 500;
 Check(gate.IsSpeaking, "Resumed sound did not reset the pause timer.");
 now += 151;
 Check(!gate.IsSpeaking, "A renewed pause did not expire.");
 gate.HoldMilliseconds = 0;
-gate.Observe(VoiceGate.Threshold);
+gate.Observe(gate.Threshold);
 Check(gate.IsSpeaking, "Zero delay suppressed an active threshold observation.");
 now += 50;
 Check(gate.IsSpeaking, "Zero delay released sustained sound between capture buffers.");
 gate.Observe(0);
 Check(!gate.IsSpeaking, "Zero delay added a pause after sound stopped.");
-gate.Observe(VoiceGate.Threshold);
+gate.Observe(gate.Threshold);
 gate.Observe(0);
 Check(!gate.IsSpeaking, "Zero delay did not release silence in the same clock tick.");
 gate.HoldMilliseconds = 650;
-gate.Observe(VoiceGate.Threshold);
+gate.Observe(gate.Threshold);
 gate.Observe(0);
 now += 300;
 gate.HoldMilliseconds = 200;
@@ -198,7 +218,75 @@ gate.HoldMilliseconds = 1000;
 Check(gate.IsSpeaking, "Lengthening the delay did not apply to the most recent sound.");
 now += 701;
 Check(!gate.IsSpeaking, "The lengthened pause did not expire.");
-Console.WriteLine("PASS: abrupt restart including microphone choice and pause delay; delay bounds/null input, legacy defaults, exclusions, interrupted write, replacement, corrupt/missing files, failed-write cleanup; deterministic quiet startup, brief pause, expiry, resumed sound, zero delay, live delay changes. No microphone or playback capture.");
+// A fixed synthetic input must change classification when the user changes threshold.
+var adjustable = new VoiceGate(() => now) { HoldMilliseconds = 0, HysteresisDecibels = 0 };
+adjustable.Observe(0.01);
+Check(!adjustable.IsSpeaking, "A quiet signal exceeded the default threshold.");
+adjustable.Threshold = (expected with { ThresholdDecibels = -46 }).GetThresholdAmplitude();
+Check(adjustable.IsSpeaking, "Lowering the threshold did not detect the existing quieter signal.");
+adjustable.Threshold = (expected with { ThresholdDecibels = -20 }).GetThresholdAmplitude();
+Check(!adjustable.IsSpeaking, "Raising the threshold did not release a quieter signal.");
+foreach (var decibels in new[] { -60.0, 0.0 })
+{
+    adjustable.Threshold = (expected with { ThresholdDecibels = decibels }).GetThresholdAmplitude();
+    adjustable.Observe(adjustable.Threshold * 0.99);
+    Check(!adjustable.IsSpeaking, "A signal below the selected threshold opened the gate.");
+    adjustable.Observe(adjustable.Threshold);
+    Check(adjustable.IsSpeaking, "A signal at the selected threshold did not open the gate.");
+}
+foreach (var invalid in new[] { 0.0, -1.0, 1.01, double.NaN, double.PositiveInfinity })
+{
+    try
+    {
+        adjustable.Threshold = invalid;
+        throw new InvalidOperationException("An invalid gate threshold was accepted.");
+    }
+    catch (ArgumentOutOfRangeException) { }
+}
+double Level(double db) => Math.Pow(10, db / 20);
+var stableSettings = new DuckingSettings { ThresholdDecibels = -30, HysteresisDecibels = 6, RestoreDelayMilliseconds = 650 };
+var stable = new VoiceGate(() => now);
+stable.Configure(stableSettings);
+stable.Observe(Level(-33));
+Check(!stable.IsSpeaking, "A quiet startup inside the hysteresis band opened detection.");
+stable.Observe(Level(-30));
+Check(stable.IsSpeaking, "The trigger boundary did not activate detection.");
+for (var index = 0; index < 40; index++)
+{
+    now += 100;
+    stable.Observe(Level(index % 2 == 0 ? -31 : -29));
+    Check(stable.IsSpeaking, "Jitter around the trigger interrupted active detection.");
+}
+// Use the same amplitude calculation as the detector to test the exact release boundary.
+stable.Observe(stableSettings.GetThresholdAmplitude() * Math.Pow(10, -6 / 20.0));
+Check(stable.IsSpeaking, "The release boundary should still sustain detection.");
+stable.Observe(Level(-36.1));
+Check(stable.IsSpeaking, "Crossing the release threshold skipped the configured hold.");
+now += 649;
+stable.Configure(stableSettings);
+Check(stable.IsSpeaking, "The release hold expired too early.");
+now += 2;
+stable.Configure(stableSettings);
+Check(!stable.IsSpeaking, "Repeated configuration refreshed the hold without new sound.");
+stable.Observe(Level(-33));
+Check(!stable.IsSpeaking, "Returning into the band reactivated a closed detector.");
+stable.Observe(Level(-29));
+stable.Observe(Level(-33));
+stable.Configure(stableSettings with { HysteresisDecibels = 0, RestoreDelayMilliseconds = 0 });
+Check(!stable.IsSpeaking, "Disabling hysteresis did not restore single-threshold detection immediately.");
+stable.Configure(stableSettings with { RestoreDelayMilliseconds = 0 });
+stable.Observe(Level(-29));
+stable.Observe(Level(-33));
+stable.Configure(stableSettings with { ThresholdDecibels = -20, RestoreDelayMilliseconds = 0 });
+Check(!stable.IsSpeaking, "A live trigger change did not recompute the release threshold.");
+foreach (var gap in new[] { 0, 12 })
+{
+    var boundary = expected with { HysteresisDecibels = gap };
+    SettingsStore.Save(boundary, path);
+    Check(SameSettings(SettingsStore.Load(path, out error), boundary) && error is null,
+        "A valid hysteresis boundary did not survive a settings reload.");
+}
+Console.WriteLine("PASS: persistence, legacy defaults, validation and pause behavior; hysteresis quiet startup, trigger/release boundaries, jitter, timed release, no reopening inside the band, live threshold/gap changes and disabled mode. No microphone or playback capture.");
 '@ | Set-Content -LiteralPath (Join-Path $testRoot 'Program.cs') -Encoding utf8
 
 & dotnet build (Join-Path $testRoot 'PersistenceTests.csproj') -c Release -p:ImportDirectoryBuildProps=false --nologo

@@ -21,6 +21,14 @@ internal sealed record DuckingSettings(
     int FadeUpMilliseconds = 30000,
     bool IncludeOtherSources = false)
 {
+    public static readonly double DefaultThresholdDecibels = 20 * Math.Log10(0.018);
+
+    public double ThresholdDecibels { get; init; } = DefaultThresholdDecibels;
+
+    public int HysteresisDecibels { get; init; } = 6;
+
+    public double GetThresholdAmplitude() => Math.Pow(10, ThresholdDecibels / 20);
+
     public int MicrophoneGainDecibels { get; init; } = 0;
 
     public string MicrophoneDeviceId { get; init; } = string.Empty;
@@ -33,7 +41,9 @@ internal sealed record DuckingSettings(
         BlacklistedProcesses.Any(hidden => PlaybackIdentity.NormalizeProcessName(hidden).Equals(
             PlaybackIdentity.NormalizeProcessName(name), StringComparison.OrdinalIgnoreCase));
 
-    public bool IsValid => MicrophoneGainDecibels is >= -24 and <= 36 && ReductionPercent is >= 0 and <= 100 &&
+    public bool IsValid => double.IsFinite(ThresholdDecibels) && ThresholdDecibels is >= -60 and <= 0 &&
+                           HysteresisDecibels is >= 0 and <= 12 &&
+                           MicrophoneGainDecibels is >= -24 and <= 36 && ReductionPercent is >= 0 and <= 100 &&
                            MicrophoneDeviceId is not null &&
                            RestoreDelayMilliseconds is >= 0 and <= 10000 &&
                            FadeDownMilliseconds is >= 0 and <= 5000 &&

@@ -15,50 +15,105 @@ namespace VoiceDucker.Audio;
 
 internal sealed class VoiceGate
 {
-    public const double Threshold = 0.018;
+    private readonly object _sync = new();
+    private double _threshold = 0.018;
+    private int _hysteresisDecibels = 6;
     private readonly Func<long> _clock;
     private int _holdMilliseconds = 650;
     private long _lastLoudTick = -1;
     private double _latestRms;
+    private bool _signalActive;
 
     public VoiceGate(Func<long>? clock = null)
     {
         _clock = clock ?? (() => Environment.TickCount64);
     }
 
+    public double Threshold
+    {
+        get { lock (_sync) return _threshold; }
+        set
+        {
+            if (!double.IsFinite(value) || value is < 0.001 or > 1)
+                throw new ArgumentOutOfRangeException(nameof(value));
+            lock (_sync)
+            {
+                if (_threshold == value) return;
+                _threshold = value;
+                EvaluateLevel();
+            }
+        }
+    }
+
+    public int HysteresisDecibels
+    {
+        get { lock (_sync) return _hysteresisDecibels; }
+        set
+        {
+            if (value is < 0 or > 12)
+                throw new ArgumentOutOfRangeException(nameof(value));
+            lock (_sync)
+            {
+                if (_hysteresisDecibels == value) return;
+                _hysteresisDecibels = value;
+                EvaluateLevel();
+            }
+        }
+    }
+
+    public void Configure(DuckingSettings settings)
+    {
+        if (!settings.IsValid) throw new ArgumentOutOfRangeException(nameof(settings));
+        lock (_sync)
+        {
+            var threshold = settings.GetThresholdAmplitude();
+            var thresholdsChanged = _threshold != threshold || _hysteresisDecibels != settings.HysteresisDecibels;
+            _threshold = threshold;
+            _hysteresisDecibels = settings.HysteresisDecibels;
+            _holdMilliseconds = settings.RestoreDelayMilliseconds;
+            if (thresholdsChanged) EvaluateLevel();
+        }
+    }
+
     public int HoldMilliseconds
     {
-        get => Volatile.Read(ref _holdMilliseconds);
+        get { lock (_sync) return _holdMilliseconds; }
         set
         {
             if (value is < 0 or > 10000)
             {
                 throw new ArgumentOutOfRangeException(nameof(value));
             }
-            Volatile.Write(ref _holdMilliseconds, value);
+            lock (_sync) _holdMilliseconds = value;
         }
     }
 
     public void Observe(double rms)
     {
-        if (rms >= Threshold)
+        lock (_sync)
         {
-            Volatile.Write(ref _lastLoudTick, _clock());
+            _latestRms = double.IsFinite(rms) && rms > 0 ? rms : 0;
+            EvaluateLevel();
         }
-        Volatile.Write(ref _latestRms, rms);
+    }
+
+    // Called with _sync held. Only a new observation or changed thresholds renews the hold.
+    private void EvaluateLevel()
+    {
+        var releaseThreshold = _threshold * Math.Pow(10, -_hysteresisDecibels / 20.0);
+        _signalActive = _latestRms >= _threshold || (_signalActive && _latestRms >= releaseThreshold);
+        if (_signalActive) _lastLoudTick = _clock();
     }
 
     public bool IsSpeaking
     {
         get
         {
-            if (Volatile.Read(ref _latestRms) >= Threshold)
+            lock (_sync)
             {
-                return true;
+                return _signalActive || (_holdMilliseconds > 0 && _lastLoudTick >= 0 &&
+                    _clock() - _lastLoudTick <= _holdMilliseconds);
             }
-            var last = Volatile.Read(ref _lastLoudTick);
-            var holdMilliseconds = HoldMilliseconds;
-            return holdMilliseconds > 0 && last >= 0 && _clock() - last <= holdMilliseconds;
         }
     }
 }

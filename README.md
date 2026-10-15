@@ -39,7 +39,20 @@ as soon as I toggle the checkbox. The microphone still starts off.
 
 Each app appears as a simple row without a card or Remove button. Its live
 session peak meter overlays the volume slider, with a -60 to 0 dBFS display range.
-The first Advanced option is **Sensitivity**, a full-width slider from -24 to +36 dB.
+The **Settings** cog at the top opens a sliding pane on the right, widening the
+window while keeping the main view compact. Settings scroll independently.
+Click the cog again to close the pane and return to the narrow window.
+At the top of Settings, **Visit our online tutorial and parameter guide** opens
+the [online guide](https://umbertogiacobbi.biz/voiceducker/guide/) in my browser.
+The link includes static campaign tags (`utm_source=voiceducker`,
+`utm_medium=referral`, `utm_campaign=in_app_help`,
+`utm_content=settings_parameters`) to identify visits from this help link.
+On smaller displays the width is limited to the available screen space.
+Settings are grouped in three compact accordion panels: **Microphone & detection**,
+**Volume & timing**, and **Apps & startup**. Opening one closes the previous panel;
+all panels can be collapsed to keep the window compact.
+
+The first microphone option is **Sensitivity**, a full-width slider from -24 to +36 dB.
 It applies software gain after microphone capture, before sound detection and the
 microphone meter. It updates immediately and is saved across restarts. It does
 not change the Windows microphone volume or the input used by other apps.
@@ -47,10 +60,25 @@ Any sound above the resulting detection threshold can lower playback.
 
 **Reset** next to Sensitivity returns microphone gain to 0 dB. The microphone
 level meter uses a thick green bar, shows the live post-gain signal from -60 to 0 dBFS, and marks the detection
-threshold at about -35 dBFS, so adjusting sensitivity has a visible reference.
+threshold, so adjusting sensitivity has a visible reference.
 The meter labels whether the current sound is above or below the threshold.
 While the microphone is off, it prompts me to press Enable to see the level.
 The Sensitivity slider uses the same green color.
+
+**Detection threshold**, below Sensitivity in Microphone & detection, adjusts the trigger
+from -60 to 0 dBFS in 0.1 dB steps. Lower values detect quieter sounds; higher
+values require louder sounds. It applies to the signal after Sensitivity gain.
+The meter marker and threshold label follow the selected value. Changes take
+effect while listening and are saved immediately across restarts. **Reset** restores
+the original threshold (about -34.9 dBFS); existing settings keep that default.
+
+**Hysteresis (dB)** separates the trigger and release thresholds. With the default
+6 dB gap, a -35 dBFS trigger stays active through dips down to -41 dBFS. Only
+sound below the release threshold starts the pause before fade back. This avoids
+repeated transitions when the microphone level hovers around the trigger. The
+gap is adjustable from 0 to 12 dB and saved immediately; 0 restores a single
+threshold. Existing settings gain the 6 dB default without changing their other
+values. The release threshold is shown below the control.
 
 **Microphone** lets me select an active input or use the Windows communications
 default; the main window shows the actual device in use. Selecting another input
@@ -60,7 +88,8 @@ refreshes when I open the selector. Selecting an input while disabled does not
 start capture.
 
 **Wait before fade back (ms)** keeps audio lowered during short pauses, starting
-from the last detected sound. The default is 650 ms, adjustable from 0 to 10,000 ms.
+from the last sound sustained by the detector, including its hysteresis band.
+The default is 650 ms, adjustable from 0 to 10,000 ms.
 After that wait, the existing Fade back duration controls the return to my volume.
 Changing the wait takes effect immediately. Both the microphone choice and wait
 are saved across restarts.
@@ -70,7 +99,7 @@ myself, VoiceDucker leaves my new choice alone. On a normal exit, it returns
 the sessions it still controls to their previous levels over **2,000 ms**.
 
 VoiceDucker's own audio sessions are filtered by process name. Existing hidden
-apps remain excluded; **Hidden apps** in Advanced options lets me restore them.
+apps remain excluded; **Hidden apps** in Apps & startup lets me restore them.
 
 See [release and WinGet instructions](docs/RELEASING.md) for packaging and publication.
 
@@ -110,10 +139,16 @@ alias to launch the installed app. The portable build uses the stable path
   <em>Human intent, AI execution, and plenty of tokens</em>
 </p>
 
-### What is VibeWare?
+### This is VibeWare
 
-I coined the term [VibeWare](https://umbertogiacobbi.biz) and started an open initiative for developers who build with AI and care about the craft. I challenge the assumption that vibe coding is synonymous with low-quality code, while openly acknowledging the weaknesses and risks of AI-generated software: experienced developers must guide the process, test carefully, check security and take responsibility for the result. With this footer, I acknowledge that I developed this software with AI and ask you to judge the quality of the work.
+This project participates in the **VibeWare initiative**, an open movement for developers who build useful software with AI under human direction. VibeWare describes participation in the initiative; it is not the application's author or publisher.
+
+I am [Umberto Giacobbi](https://umbertogiacobbi.biz). I define this project's purpose, guide its implementation, and remain responsible for checking the result. Each project keeps its own identity, license, release status and validation evidence.
 
 [**Read the VibeWare manifesto**](https://umbertogiacobbi.biz/vibeware/manifesto)
 
-*You are welcome to explore, adapt and reuse the open-source VibeWare materials under the project license — my contribution to the developer community.*
+[VoiceDucker on GitHub](https://github.com/umbertotechnopreneur/VoiceDucker) · [VibeWare on GitHub](https://github.com/umbertotechnopreneur/VibeWare) · [umbertogiacobbi.biz](https://umbertogiacobbi.biz)
+
+*Explore, adapt and reuse the project materials under their applicable licenses.*
+
+[Terms](https://umbertogiacobbi.biz/terms/) · [Privacy](https://umbertogiacobbi.biz/privacy/)

@@ -35,6 +35,7 @@ public sealed partial class MainWindow : Window
     private AboutWindow? _aboutWindow;
     private CloseChoiceWindow? _closeChoice;
     private bool _settingsReady;
+    private Expander? _openSettingsExpander;
     private bool _allowClose;
     private bool _micLedActive;
     private readonly Storyboard _micLedPulse = new();
@@ -45,6 +46,9 @@ public sealed partial class MainWindow : Window
     private bool _refreshingStreamRows;
     private bool _refreshingMicrophones;
     private bool _microphoneOperationPending;
+    private bool _microphoneMeterRunning;
+    private bool _microphoneDetectionActive;
+    private double _microphoneMeterRms;
 
     public MainWindow()
     {
@@ -86,11 +90,9 @@ public sealed partial class MainWindow : Window
         OtherSourcesCheckBox.IsChecked = _settings.IncludeOtherSources;
         SensitivitySlider.Value = _settings.MicrophoneGainDecibels;
         UpdateSensitivityLabel();
-        var thresholdDb = 20 * Math.Log10(VoiceGate.Threshold);
-        var thresholdPosition = Math.Clamp((thresholdDb + 60) / 60, 0, 1);
-        ThresholdBeforeColumn.Width = new GridLength(thresholdPosition, GridUnitType.Star);
-        ThresholdAfterColumn.Width = new GridLength(1 - thresholdPosition, GridUnitType.Star);
-        MicrophoneThresholdText.Text = $"Threshold {thresholdDb:0.0} dBFS";
+        ThresholdSlider.Value = _settings.ThresholdDecibels;
+        HysteresisBox.Value = _settings.HysteresisDecibels;
+        UpdateThresholdDisplay();
         RefreshHiddenApps();
         _settingsReady = true;
         FeedbackText.Text = settingsError ?? string.Empty;
@@ -107,7 +109,7 @@ public sealed partial class MainWindow : Window
     private async void OnRootLoaded(object sender, RoutedEventArgs args)
     {
         RootPanel.Loaded -= OnRootLoaded;
-        WindowContentSizing.Fit(this, RootPanel, 520);
+        FitMainWindow(preservePosition: false);
         try
         {
             _playbackMonitor = new PlaybackMonitor();
@@ -150,14 +152,27 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void AdvancedOptionsExpander_SizeChanged(object sender, SizeChangedEventArgs args)
+    private void SettingsExpander_Expanding(Expander sender, ExpanderExpandingEventArgs args)
     {
-        if (RootPanel.IsLoaded && args.NewSize.Height != args.PreviousSize.Height)
+        if (_openSettingsExpander != sender)
         {
-            // Fit after the expander has laid out its expanded or collapsed content.
-            DispatcherQueue.TryEnqueue(() =>
-                WindowContentSizing.Fit(this, RootPanel, 520, preservePosition: true));
+            if (_openSettingsExpander is not null) _openSettingsExpander.IsExpanded = false;
+            _openSettingsExpander = sender;
         }
+    }
+
+    private void SettingsButton_Click(object sender, RoutedEventArgs args)
+    {
+        SettingsSplitView.IsPaneOpen = SettingsButton.IsChecked == true;
+        FitMainWindow();
+    }
+
+    private void FitMainWindow(bool preservePosition = true)
+    {
+        WindowContentSizing.Fit(this, RootPanel, 520, preservePosition: preservePosition,
+            additionalWidth: SettingsSplitView.IsPaneOpen ? 520 : 0);
+        var scale = Math.Max(0.1, RootPanel.XamlRoot?.RasterizationScale ?? 1);
+        SettingsSplitView.OpenPaneLength = AppWindow.ClientSize.Width / scale / 2;
     }
 
     private async void ToggleButton_Click(object sender, RoutedEventArgs args) =>
@@ -253,11 +268,13 @@ public sealed partial class MainWindow : Window
 
         if (value < sender.Minimum || value > sender.Maximum)
         {
-            FeedbackText.Text = "Reduction: 0–100%; fade down: 0–5000 ms; wait: 0–10000 ms; fade back: 0–30000 ms.";
+            FeedbackText.Text = "Hysteresis: 0–12 dB; reduction: 0–100%; fade down: 0–5000 ms; wait: 0–10000 ms; fade back: 0–30000 ms.";
             return;
         }
 
-        var next = sender == ReductionBox
+        var next = sender == HysteresisBox
+            ? _settings with { HysteresisDecibels = (int)value }
+            : sender == ReductionBox
             ? _settings with { ReductionPercent = (int)value }
             : sender == FadeDownBox
                 ? _settings with { FadeDownMilliseconds = (int)value }
@@ -265,6 +282,7 @@ public sealed partial class MainWindow : Window
                     ? _settings with { RestoreDelayMilliseconds = (int)value }
                     : _settings with { FadeUpMilliseconds = (int)value };
         _settings = next;
+        UpdateThresholdDisplay();
         _engine.UpdateSettings(next);
         SaveSettings();
     }
@@ -311,6 +329,41 @@ public sealed partial class MainWindow : Window
 
     private void SensitivityReset_Click(object sender, RoutedEventArgs args) =>
         SensitivitySlider.Value = 0;
+
+    private void ThresholdSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs args)
+    {
+        if (!_settingsReady) return;
+        _settings = _settings with { ThresholdDecibels = args.NewValue };
+        UpdateThresholdDisplay();
+        _engine.UpdateSettings(_settings);
+        SaveSettings();
+    }
+
+    private void UpdateThresholdDisplay()
+    {
+        var thresholdDb = _settings.ThresholdDecibels;
+        var position = Math.Clamp((thresholdDb + 60) / 60, 0, 1);
+        ThresholdBeforeColumn.Width = new GridLength(position, GridUnitType.Star);
+        ThresholdAfterColumn.Width = new GridLength(1 - position, GridUnitType.Star);
+        MicrophoneThresholdText.Text = $"Threshold {thresholdDb:0.0} dBFS";
+        ThresholdValueText.Text = $"{thresholdDb:0.0} dBFS";
+        ReleaseThresholdText.Text = $"Release below {thresholdDb - _settings.HysteresisDecibels:0.0} dBFS, then wait before fade back.";
+        UpdateMicrophoneThresholdHint();
+    }
+
+    private void UpdateMicrophoneThresholdHint() =>
+        MicrophoneLevelHint.Text = !_microphoneMeterRunning
+            ? "Press Enable to see your microphone level."
+            : _microphoneMeterRms >= _settings.GetThresholdAmplitude()
+                ? "Above threshold — sound detected"
+                : _microphoneDetectionActive
+                    ? _microphoneMeterRms >= _settings.GetThresholdAmplitude() * Math.Pow(10, -_settings.HysteresisDecibels / 20.0)
+                        ? "Detection held — hysteresis"
+                        : "Waiting before fade back"
+                    : "Below threshold";
+
+    private void ThresholdReset_Click(object sender, RoutedEventArgs args) =>
+        ThresholdSlider.Value = DuckingSettings.DefaultThresholdDecibels;
 
     private void MicrophoneComboBox_DropDownOpened(object sender, object args) =>
         RefreshMicrophoneChoices();
@@ -424,11 +477,10 @@ public sealed partial class MainWindow : Window
             var meterFraction = Math.Clamp((microphoneDb + 60) / 60, 0, 1);
             MicrophoneLevelColumn.Width = new GridLength(meterFraction, GridUnitType.Star);
             MicrophoneEmptyColumn.Width = new GridLength(1 - meterFraction, GridUnitType.Star);
-            MicrophoneLevelHint.Text = !status.Running
-                ? "Press Enable to see your microphone level."
-                : rms >= VoiceGate.Threshold
-                    ? "Above threshold — sound detected"
-                    : "Below threshold";
+            _microphoneMeterRunning = status.Running;
+            _microphoneDetectionActive = status.Speaking;
+            _microphoneMeterRms = rms;
+            UpdateMicrophoneThresholdHint();
             MicrophoneLevelText.Text = !status.Running ? "Off" : rms <= 0 ? "−∞ dBFS" : $"{microphoneDb:0.0} dBFS";
 
             VisualStateText.Text = !status.Running ? "MIC OFF" :
@@ -522,7 +574,7 @@ public sealed partial class MainWindow : Window
         NoStreamsText.Visibility = streams.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (layoutChanged)
         {
-            WindowContentSizing.Fit(this, RootPanel, 520, preservePosition: true);
+            FitMainWindow();
         }
     }
 

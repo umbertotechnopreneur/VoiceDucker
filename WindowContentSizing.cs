@@ -23,16 +23,17 @@ namespace VoiceDucker;
 internal static class WindowContentSizing
 {
     public static void Fit(Window window, FrameworkElement content, double preferredWidth,
-        AppWindow? owner = null, bool preservePosition = false)
+        AppWindow? owner = null, bool preservePosition = false, double additionalWidth = 0)
     {
         var scale = Math.Max(0.1, content.XamlRoot?.RasterizationScale ?? 1);
         var workArea = DisplayArea.GetFromWindowId(window.AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
         var edge = (int)Math.Ceiling(20 * scale);
         var clientWidth = Math.Max(1, Math.Min(
-            (int)Math.Ceiling(preferredWidth * scale), workArea.Width - 2 * edge));
+            (int)Math.Ceiling((preferredWidth + additionalWidth) * scale), workArea.Width - 2 * edge));
 
         // Reserve space for a vertical scrollbar if the display cannot fit all content.
-        content.Measure(new Size(Math.Max(1, clientWidth / scale - 20), double.PositiveInfinity));
+        var contentWidth = clientWidth / scale * preferredWidth / (preferredWidth + additionalWidth);
+        content.Measure(new Size(Math.Max(1, contentWidth - 20), double.PositiveInfinity));
         var desiredHeight = (int)Math.Ceiling((content.DesiredSize.Height + 8) * scale);
         var chromeHeight = Math.Max(0, window.AppWindow.Size.Height - window.AppWindow.ClientSize.Height);
         var maxClientHeight = Math.Max(1, workArea.Height - 2 * edge - chromeHeight);

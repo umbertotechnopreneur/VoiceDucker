@@ -127,6 +127,7 @@ internal sealed class DuckingEngine : IDisposable
             }
 
             var gate = new VoiceGate();
+            gate.Configure(Volatile.Read(ref _settings));
             Exception? captureFailure = null;
             capture.RecordingStopped += (_, args) =>
             {
@@ -152,7 +153,7 @@ internal sealed class DuckingEngine : IDisposable
             while (!stop.Wait(50))
             {
                 var settings = Volatile.Read(ref _settings);
-                gate.HoldMilliseconds = settings.RestoreDelayMilliseconds;
+                gate.Configure(settings);
                 var speaking = gate.IsSpeaking;
                 var lowered = playback.Update(speaking, settings);
                 var message = speaking && lowered > 0
