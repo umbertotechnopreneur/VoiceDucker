@@ -657,19 +657,25 @@ public sealed partial class MainWindow : Window
             IsEnabled = !stream.Muted
         };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(slider, $"{stream.Name} volume");
-        // Overlay the session peak on the slider track; volume remains independently draggable.
+        // The meter draws the track; the native slider keeps its thumb above it in every state.
+        foreach (var state in new[] { "", "PointerOver", "Pressed", "Disabled" })
+        {
+            slider.Resources[$"SliderTrackFill{state}"] = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+            slider.Resources[$"SliderTrackValueFill{state}"] = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+        }
         var meter = new ProgressBar
         {
             Minimum = 0, Maximum = 100, Value = 0, Height = 4,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(12, 0, 12, 0), IsHitTestVisible = false,
             Foreground = new SolidColorBrush(Color.FromArgb(255, 246, 162, 76)),
-            Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0))
+            Style = (Style)RootPanel.Resources["PlaybackLevelMeterStyle"]
         };
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(meter, $"{stream.Name} audio level");
         var volumeTrack = new Grid();
-        volumeTrack.Children.Add(slider);
+        Canvas.SetZIndex(slider, 1);
         volumeTrack.Children.Add(meter);
+        volumeTrack.Children.Add(slider);
         var panel = new StackPanel { Spacing = 6 };
         panel.Children.Add(title);
         panel.Children.Add(volumeTrack);

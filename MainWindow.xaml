@@ -176,6 +176,11 @@ VBWR E -->
     <ScrollViewer VerticalScrollBarVisibility="Auto">
 
         <StackPanel x:Name="RootPanel" Padding="22" Spacing="16">
+            <StackPanel.Resources>
+                <Style x:Key="PlaybackLevelMeterStyle" TargetType="ProgressBar">
+                    <Setter Property="Background" Value="{ThemeResource ControlStrongFillColorDefaultBrush}" />
+                </Style>
+            </StackPanel.Resources>
             <Grid ColumnSpacing="12" VerticalAlignment="Center">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
