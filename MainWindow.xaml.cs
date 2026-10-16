@@ -50,6 +50,8 @@ public sealed partial class MainWindow : Window
     private bool _microphoneDetectionActive;
     private double _microphoneMeterRms;
     private readonly CancellationTokenSource _lifetime = new();
+    private readonly WindowPlacementService _windowPlacement;
+    private readonly bool _restoredWindowPlacement;
 
     public MainWindow()
     {
@@ -99,6 +101,13 @@ public sealed partial class MainWindow : Window
         FeedbackText.Text = settingsError ?? string.Empty;
         RefreshMicrophoneChoices();
 
+        _windowPlacement = new WindowPlacementService(this, () => SettingsSplitView.IsPaneOpen,
+            message => FeedbackText.Text = message);
+        _restoredWindowPlacement = _windowPlacement.TryRestore(out var settingsPaneOpen);
+        SettingsSplitView.IsPaneOpen = settingsPaneOpen;
+        SettingsButton.IsChecked = settingsPaneOpen;
+        _windowPlacement.SizeChanged += UpdateSettingsPaneWidth;
+
         StartupCheckBox.IsEnabled = false;
 
         _engine.StatusChanged += OnStatusChanged;
@@ -111,7 +120,8 @@ public sealed partial class MainWindow : Window
     private async void OnRootLoaded(object sender, RoutedEventArgs args)
     {
         RootPanel.Loaded -= OnRootLoaded;
-        FitMainWindow(preservePosition: false);
+        if (!_restoredWindowPlacement) FitMainWindow(preservePosition: false);
+        UpdateSettingsPaneWidth();
         try
         {
             _playbackMonitor = new PlaybackMonitor();
@@ -125,6 +135,7 @@ public sealed partial class MainWindow : Window
         {
             FeedbackText.Text = $"Audio streams could not be listed: {exception.Message}";
         }
+        _windowPlacement.StartTracking();
         try
         {
             var handle = WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -188,12 +199,21 @@ public sealed partial class MainWindow : Window
     {
         SettingsSplitView.IsPaneOpen = SettingsButton.IsChecked == true;
         FitMainWindow();
+        _windowPlacement.SaveNow();
     }
 
     private void FitMainWindow(bool preservePosition = true)
     {
-        WindowContentSizing.Fit(this, RootPanel, 520, preservePosition: preservePosition,
-            additionalWidth: SettingsSplitView.IsPaneOpen ? 520 : 0);
+        if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Restored })
+        {
+            WindowContentSizing.Fit(this, RootPanel, 520, preservePosition: preservePosition,
+                additionalWidth: SettingsSplitView.IsPaneOpen ? 520 : 0);
+        }
+        UpdateSettingsPaneWidth();
+    }
+
+    private void UpdateSettingsPaneWidth()
+    {
         var scale = Math.Max(0.1, RootPanel.XamlRoot?.RasterizationScale ?? 1);
         SettingsSplitView.OpenPaneLength = AppWindow.ClientSize.Width / scale / 2;
     }
@@ -595,7 +615,7 @@ public sealed partial class MainWindow : Window
         }
 
         NoStreamsText.Visibility = streams.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (layoutChanged)
+        if (layoutChanged && !_windowPlacement.IsTracking && !_restoredWindowPlacement)
         {
             FitMainWindow();
         }
@@ -853,6 +873,7 @@ public sealed partial class MainWindow : Window
 
     private void OnWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
+        _windowPlacement.SaveNow();
         if (_allowClose)
         {
             return;
@@ -880,6 +901,7 @@ public sealed partial class MainWindow : Window
                 throw new InvalidOperationException("The tray icon is unavailable.");
             }
             _aboutWindow?.Close();
+            _windowPlacement.SaveNow();
             _tray.HideWindow();
         }
         catch (Exception exception)
@@ -891,12 +913,15 @@ public sealed partial class MainWindow : Window
 
     private void ExitApplication()
     {
+        _windowPlacement.SaveNow();
         _allowClose = true;
         Close();
     }
 
     private void OnClosed(object sender, WindowEventArgs args)
     {
+        _windowPlacement.SizeChanged -= UpdateSettingsPaneWidth;
+        _windowPlacement.Dispose();
         _lifetime.Cancel();
         _micLedPulse.Stop();
         _mixerPulse.Stop();

@@ -39,6 +39,14 @@ Every valid audio setting is saved immediately, including while I type a number,
 and restored after app or Windows restarts. Windows startup changes take effect
 as soon as I toggle the checkbox. The microphone still starts off.
 
+The main window also remembers its position, size, monitor, DPI scale, maximized
+state, and whether Settings was open. Reopening the app keeps that layout instead
+of centering or resizing it again when audio streams change. If I disconnect the
+saved monitor, the window reopens inside the primary monitor's work area. If I
+change Windows scaling, it keeps its logical size at the monitor's current DPI.
+Window placement is saved separately from audio settings, including when I hide
+the app in the tray.
+
 Each app appears as a simple row without a card or Remove button. Its live
 session peak meter overlays the volume slider, with a -60 to 0 dBFS display range.
 The **Settings** cog at the top opens a sliding pane on the right, widening the
