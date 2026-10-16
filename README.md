@@ -19,6 +19,8 @@ The first public version is **0.1.0**, tagged **v0.1.0-stable**. Get the matchin
 
 On **Windows 11**, extract the whole ZIP into a folder you can write to, then open `VoiceDucker.exe`. Keep its companion files together; the ZIP includes the .NET and Windows App SDK runtimes. The microphone starts **off**. Put some music on, press **Enable**, and talk at your usual volume. Adjust the threshold if it needs a nudge.
 
+If monitoring is still off 15 seconds after I open the app, Windows shows a one-time reminder: “VoiceDucker is not monitoring your microphone. Press Enable when you're ready.” It never turns the microphone on for me.
+
 The ZIP is portable and unsigned. Windows may show a security prompt. There is no MSIX installation or signing certificate to import for this download.
 
 ## Screenshot
@@ -105,7 +107,18 @@ See [release and WinGet instructions](docs/RELEASING.md) for packaging and publi
 
 ## Build
 
-On Windows 11 with the .NET 10 SDK and Windows App SDK build tools, I run:
+Open `VoiceDucker.sln` in Visual Studio with the .NET desktop development
+workload and Windows App SDK build tools installed. The solution contains one
+WinUI project and only the supported architectures: x64 and ARM64.
+
+For ordinary local debugging, choose **Debug** and **x64**, select the
+**VoiceDucker (Unpackaged)** launch profile, then press **F5**. It builds and
+starts the app directly for debugging; it does not install an MSIX and the
+microphone remains off until I press **Enable**. The packaged profile stays
+available when I specifically want to debug package identity or MSIX behavior.
+
+From PowerShell on Windows 11 with the .NET 10 SDK and Windows App SDK build
+tools, I can produce the same portable Debug build with:
 
 ```powershell
 .\scripts\build.ps1 -Architecture x64 -Configuration Debug -Run
@@ -115,8 +128,8 @@ The build puts the app at `artifacts/app/win-x64/VoiceDucker.exe`. Build
 ARM64 with `-Architecture ARM64`. I publish only portable x64 and ARM64 ZIPs
 through GitHub Actions, never MSIX packages there.
 
-For a local signed Release MSIX, I use a trusted code-signing certificate with
-subject `CN=VibeWare` in `Cert:\CurrentUser\My`:
+For a local signed Release MSIX installation, I use a trusted code-signing
+certificate with subject `CN=VibeWare` in `Cert:\CurrentUser\My`:
 
 ```powershell
 pwsh -NoProfile -File .\scripts\package-msix.ps1 -Architecture x64 -CertificateThumbprint <thumbprint> -Install
@@ -128,6 +141,10 @@ The installed MSIX keeps the Start menu identity
 alias to launch the installed app. The portable build uses the stable path
 `artifacts/app/win-x64/VoiceDucker.exe`; temporary validation builds stay under
 `artifacts` and do not create launch shortcuts.
+
+The portable release version is `0.1.0`; the package manifest has its separate
+MSIX development/build number. See [release and WinGet instructions](docs/RELEASING.md)
+before installing one over the other.
 
 ---
 

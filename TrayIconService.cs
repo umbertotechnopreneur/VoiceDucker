@@ -27,8 +27,10 @@ internal sealed class TrayIconService : IDisposable
     private const uint IconMessage = 1;
     private const uint IconImage = 2;
     private const uint IconTip = 4;
+    private const uint IconInfo = 0x10;
     private const uint IconShowTip = 0x80;
     private const uint IconVersion4 = 4;
+    private const uint InformationNotification = 1;
     private const uint CallbackMessage = 0x8000 + 0x350;
     private const uint IconSelectMessage = 0x0400;
     private const uint IconKeySelectMessage = 0x0401;
@@ -126,6 +128,28 @@ internal sealed class TrayIconService : IDisposable
         }
         _toolTip = next;
         EnsureIconRegistered();
+    }
+
+    public void ShowNotification(string title, string message)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+        if (_disposed)
+        {
+            return;
+        }
+
+        EnsureIconRegistered();
+        var data = CreateIconData();
+        data.Flags |= IconInfo;
+        data.Info = message;
+        data.InfoTitle = title;
+        data.TimeoutOrVersion = 10_000;
+        data.InfoFlags = InformationNotification;
+        if (!ShellNotifyIcon(ModifyIcon, ref data))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "The Windows notification could not be shown.");
+        }
     }
 
     public void Dispose()

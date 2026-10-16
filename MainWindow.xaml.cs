@@ -49,6 +49,7 @@ public sealed partial class MainWindow : Window
     private bool _microphoneMeterRunning;
     private bool _microphoneDetectionActive;
     private double _microphoneMeterRms;
+    private readonly CancellationTokenSource _lifetime = new();
 
     public MainWindow()
     {
@@ -104,6 +105,7 @@ public sealed partial class MainWindow : Window
         AppWindow.Closing += OnWindowClosing;
         RootPanel.Loaded += OnRootLoaded;
         Closed += OnClosed;
+        _ = RemindWhenMonitoringIsOffAsync();
     }
 
     private async void OnRootLoaded(object sender, RoutedEventArgs args)
@@ -158,6 +160,27 @@ public sealed partial class MainWindow : Window
         {
             if (_openSettingsExpander is not null) _openSettingsExpander.IsExpanded = false;
             _openSettingsExpander = sender;
+        }
+    }
+
+    private async Task RemindWhenMonitoringIsOffAsync()
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(15), _lifetime.Token);
+            if (!_engine.IsRunning)
+            {
+                _tray?.ShowNotification("Monitoring is off",
+                    "VoiceDucker is not monitoring your microphone. Press Enable when you're ready.");
+            }
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+            // The application closed before the one-time startup reminder was due.
+        }
+        catch (Exception exception)
+        {
+            FeedbackText.Text = $"Monitoring reminder could not be shown: {exception.Message}";
         }
     }
 
@@ -272,15 +295,15 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var next = sender == HysteresisBox
-            ? _settings with { HysteresisDecibels = (int)value }
-            : sender == ReductionBox
-            ? _settings with { ReductionPercent = (int)value }
-            : sender == FadeDownBox
-                ? _settings with { FadeDownMilliseconds = (int)value }
-                : sender == RestoreDelayBox
-                    ? _settings with { RestoreDelayMilliseconds = (int)value }
-                    : _settings with { FadeUpMilliseconds = (int)value };
+        var next = sender switch
+        {
+            var box when box == HysteresisBox => _settings with { HysteresisDecibels = (int)value },
+            var box when box == ReductionBox => _settings with { ReductionPercent = (int)value },
+            var box when box == FadeDownBox => _settings with { FadeDownMilliseconds = (int)value },
+            var box when box == RestoreDelayBox => _settings with { RestoreDelayMilliseconds = (int)value },
+            var box when box == FadeUpBox => _settings with { FadeUpMilliseconds = (int)value },
+            _ => throw new InvalidOperationException("An unknown numeric setting control was used.")
+        };
         _settings = next;
         UpdateThresholdDisplay();
         _engine.UpdateSettings(next);
@@ -874,6 +897,7 @@ public sealed partial class MainWindow : Window
 
     private void OnClosed(object sender, WindowEventArgs args)
     {
+        _lifetime.Cancel();
         _micLedPulse.Stop();
         _mixerPulse.Stop();
         _streamTimer?.Stop();
@@ -884,5 +908,6 @@ public sealed partial class MainWindow : Window
         _aboutWindow?.Close();
         _closeChoice?.Close();
         _engine.Dispose();
+        _lifetime.Dispose();
     }
 }
