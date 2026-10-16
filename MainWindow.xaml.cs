@@ -117,6 +117,14 @@ public sealed partial class MainWindow : Window
         _ = RemindWhenMonitoringIsOffAsync();
     }
 
+    internal void ShowForRepeatedLaunch()
+    {
+        if (_tray is null) Activate();
+        else _tray.ShowWindow();
+        ExistingInstanceNotice.IsOpen = true;
+        MainScrollViewer.ChangeView(null, 0, null);
+    }
+
     private async void OnRootLoaded(object sender, RoutedEventArgs args)
     {
         RootPanel.Loaded -= OnRootLoaded;

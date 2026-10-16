@@ -21,8 +21,8 @@ namespace VoiceDucker;
 /// </summary>
 public partial class App : Application
 {
-    private static Mutex? _instanceMutex;
-    private Window? _window;
+    private SingleInstanceService? _singleInstance;
+    private MainWindow? _window;
 
     /// <summary>
     /// Initializes the XAML application.
@@ -38,36 +38,44 @@ public partial class App : Application
     /// <param name="args">Details about the launch request and process.</param>
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
-        _instanceMutex = new Mutex(true, @"Local\VibeWare.VoiceDucker", out var firstInstance);
-        if (!firstInstance)
+        _singleInstance = new SingleInstanceService();
+        if (!_singleInstance.IsPrimary)
         {
-            _instanceMutex.Dispose();
-            _instanceMutex = null;
+            // Transfer foreground permission when the existing window is ready.
+            // The named event, rather than the window title, delivers activation.
             var existingWindow = FindWindow(null, "VoiceDucker");
             if (existingWindow != IntPtr.Zero)
             {
-                ShowWindow(existingWindow, ShowWindowRestore);
-                SetForegroundWindow(existingWindow);
+                GetWindowThreadProcessId(existingWindow, out var processId);
+                _ = AllowSetForegroundWindow(processId);
             }
+            _singleInstance.RequestActivation();
+            _singleInstance.Dispose();
+            _singleInstance = null;
             Exit();
             return;
         }
 
         _window = new MainWindow();
+        _window.Closed += (_, _) =>
+        {
+            _window = null;
+            _singleInstance?.Dispose();
+            _singleInstance = null;
+        };
+        var dispatcher = _window.DispatcherQueue;
+        _singleInstance.Listen(() =>
+            dispatcher.TryEnqueue(() => _window?.ShowForRepeatedLaunch()));
         _window.Activate();
     }
-
-    // SW_RESTORE also shows a window that was hidden in the tray.
-    private const int ShowWindowRestore = 9;
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr FindWindow(string? className, string windowName);
 
     [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool ShowWindow(IntPtr window, int command);
+    private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetForegroundWindow(IntPtr window);
+    private static extern bool AllowSetForegroundWindow(uint processId);
 }

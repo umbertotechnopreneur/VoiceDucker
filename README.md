@@ -21,6 +21,11 @@ On **Windows 11**, extract the whole ZIP into a folder you can write to, then op
 
 If monitoring is still off 15 seconds after I open the app, Windows shows a one-time reminder: “VoiceDucker is not monitoring your microphone. Press Enable when you're ready.” It never turns the microphone on for me.
 
+Only one VoiceDucker instance runs per Windows session. Opening it again brings
+the existing window forward, including from the system tray, and shows
+“VoiceDucker is already running”. It keeps the current monitoring state and
+window layout instead of starting another audio engine.
+
 The ZIP is portable and unsigned. Windows may show a security prompt. There is no MSIX installation or signing certificate to import for this download.
 
 ## Screenshot

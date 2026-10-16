@@ -173,7 +173,7 @@ VBWR E -->
                 </ScrollViewer>
             </Border>
         </SplitView.Pane>
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <ScrollViewer x:Name="MainScrollViewer" VerticalScrollBarVisibility="Auto">
 
         <StackPanel x:Name="RootPanel" Padding="22" Spacing="16">
             <StackPanel.Resources>
@@ -181,6 +181,9 @@ VBWR E -->
                     <Setter Property="Background" Value="{ThemeResource ControlStrongFillColorDefaultBrush}" />
                 </Style>
             </StackPanel.Resources>
+            <InfoBar x:Name="ExistingInstanceNotice" IsOpen="False" IsClosable="True"
+                     Severity="Informational" Title="VoiceDucker is already running"
+                     Message="Only one instance can run at a time. This is your existing window." />
             <Grid ColumnSpacing="12" VerticalAlignment="Center">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />

@@ -115,7 +115,8 @@ internal sealed class TrayIconService : IDisposable
 
     public void ShowWindow()
     {
-        _ = ShowWindow(_windowHandle, 1);
+        // SW_SHOW preserves a maximized window; SW_RESTORE is needed only when minimized.
+        _ = ShowWindow(_windowHandle, IsIconic(_windowHandle) ? 9 : 5);
         _ = SetForegroundWindow(_windowHandle);
     }
 
@@ -351,6 +352,9 @@ internal sealed class TrayIconService : IDisposable
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool IsWindowVisible(IntPtr windowHandle);
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsIconic(IntPtr windowHandle);
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool ShowWindow(IntPtr windowHandle, int command);
