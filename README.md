@@ -1,12 +1,43 @@
 # VoiceDucker
 
-## Why I built it
+**Keep your soundtrack. Give your voice the spotlight.**
 
-Imagine your music is playing and you want to talk. You say, "A little quieter, please!" The music turns down, lets you finish, then comes back. That is the whole idea. No shouting match with the speakers.
+VoiceDucker lowers Spotify and, optionally, other playing Windows apps when you
+speak, then gently brings them back. Press **Enable**, talk naturally, and let
+background audio make room. No shouting match with the speakers. No constant
+trips to the volume slider.
+
+## Make room for your voice
+
+- **Talk to AI. Keep the music.** Chat naturally with an AI assistant while music
+  or videos play in the background. When you speak, playback steps back; when
+  you're done, it returns.
+- **Keep browser audio in its place.** A tab starts playing while you're talking?
+  Include other apps so browser playback can step back too, instead of drowning
+  you out.
+- **Your demo, not your playlist.** Use VoiceDucker alongside **OBS Studio**,
+  **Microsoft Clipchamp**, or other streaming and recording tools to keep
+  unrelated Windows playback lower while you narrate a demo, tutorial, or stream.
+- **Take the call, not the volume controls.** Keep background music from
+  competing with you during **Zoom**, **Microsoft Teams**, and similar meetings.
+
+Spotify is included by default. Turn on **Also lower other apps** for browsers
+and other players. Hide apps you want to leave untouched, such as your meeting
+app. The trigger is microphone sound: opening a browser or joining a call alone
+does not lower audio.
+
+For recording and streaming, VoiceDucker controls Windows playback volume, not
+the recording software's internal mixer or audio tracks. What reaches the
+recording or audience depends on the capture source and audio routing. Check a
+short recording first; [OBS audio sources](https://obsproject.com/kb/application-audio-capture-guide)
+and [Clipchamp screen recording](https://support.microsoft.com/en-us/clipchamp/how-to-make-a-screen-recording)
+offer different capture options.
+
+## Why I built it
 
 I talk to AI while Spotify keeps me company. Windows' **Communications** setting did not lower Spotify the way I needed, and reaching for the volume slider every time got old. So I made a tiny volume referee: VoiceDucker.
 
-I press **Enable** when I want it to listen to my microphone. When I speak, it lowers Spotify; I can choose other playing apps too. When I stop, it fades them back to the volume I chose. My voice stays in memory: no recordings, transcription, or uploads.
+I press **Enable** when I want it to listen to my microphone. My voice stays in memory: no recordings, transcription, or uploads.
 
 Created by [Umberto Giacobbi](https://umbertogiacobbi.biz), shared under the [MIT license](LICENSE).
 
