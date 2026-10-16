@@ -33,6 +33,14 @@ internal static class StartupRegistration
 
     public static async Task InitializeDefaultAsync()
     {
+        if (IsPackaged())
+        {
+            // A prior portable build may have left an HKCU Run entry that points
+            // to a build folder. Package identity owns startup for MSIX, so never
+            // leave two launch mechanisms for the same app.
+            RemoveLegacyRunEntry();
+        }
+
         if (File.Exists(PreferencePath))
         {
             return;
@@ -79,6 +87,7 @@ internal static class StartupRegistration
     {
         if (IsPackaged())
         {
+            RemoveLegacyRunEntry();
             var task = await StartupTask.GetAsync(StartupTaskId);
             if (enabled)
             {
@@ -104,6 +113,12 @@ internal static class StartupRegistration
             using var key = Registry.CurrentUser.OpenSubKey(RunKey, true);
             key?.DeleteValue(ValueName, false);
         }
+    }
+
+    private static void RemoveLegacyRunEntry()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(RunKey, true);
+        key?.DeleteValue(ValueName, false);
     }
 
     private static bool IsPackaged()
