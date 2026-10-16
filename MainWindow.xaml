@@ -163,7 +163,30 @@ VBWR E -->
                     <StackPanel Spacing="8">
                         <CheckBox x:Name="OtherSourcesCheckBox" Content="Also lower other apps"
                                   Click="OtherSourcesCheckBox_Click" />
-                        <Button x:Name="HiddenAppsButton" Content="Hidden apps" Visibility="Collapsed" />
+                        <Button x:Name="HiddenAppsButton" Content="Hidden apps">
+                            <Button.Flyout>
+                                <Flyout>
+                                    <StackPanel Width="280" Spacing="12">
+                                        <TextBlock Text="Hidden apps" FontWeight="SemiBold" />
+                                        <TextBlock Text="Hidden apps are not listed or automatically lowered. Use the X to show an app again."
+                                                   TextWrapping="Wrap" FontSize="12" Opacity="0.72" />
+                                        <TextBlock x:Name="NoHiddenAppsText" Text="No hidden apps." />
+                                        <ListView x:Name="HiddenAppsList" MaxHeight="280"
+                                                  SelectionMode="None" IsItemClickEnabled="False"
+                                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                                  HorizontalContentAlignment="Stretch"
+                                                  AutomationProperties.Name="Hidden apps">
+                                            <ListView.ItemContainerStyle>
+                                                <Style TargetType="ListViewItem">
+                                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                                    <Setter Property="Padding" Value="0" />
+                                                </Style>
+                                            </ListView.ItemContainerStyle>
+                                        </ListView>
+                                    </StackPanel>
+                                </Flyout>
+                            </Button.Flyout>
+                        </Button>
                     </StackPanel>
                     <CheckBox x:Name="StartupCheckBox" Content="Start with Windows (opens with mic off)"
                               Click="StartupCheckBox_Click" />

@@ -18,6 +18,10 @@ using Windows.ApplicationModel;
 
 namespace VoiceDucker;
 
+/// <summary>
+/// Uses StartupTask for an installed MSIX and the Run key for a portable build.
+/// The preference marker prevents first-run defaults from overriding later choices.
+/// </summary>
 internal static class StartupRegistration
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -27,21 +31,21 @@ internal static class StartupRegistration
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "VibeWare", "VoiceDucker", "startup-preference-set");
 
-    public static async Task InitializeDefaultAsync(bool hasSavedSettings)
+    public static async Task InitializeDefaultAsync()
     {
         if (File.Exists(PreferencePath))
         {
             return;
         }
 
-        // Older installations with saved settings keep their current startup choice.
-        if (!hasSavedSettings && !await IsEnabledAsync())
+        if (!await IsEnabledAsync())
         {
             if (IsPackaged())
             {
                 var task = await StartupTask.GetAsync(StartupTaskId);
                 if (task.State == StartupTaskState.DisabledByUser)
                 {
+                    // This is a current Windows choice, not a migration rule.
                     SavePreferenceMarker();
                     return;
                 }

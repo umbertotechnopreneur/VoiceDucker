@@ -18,6 +18,7 @@ $sourceRoot = [System.Security.SecurityElement]::Escape($projectRoot)
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$sourceRoot\AtomicJsonFile.cs" Link="AtomicJsonFile.cs" />
     <Compile Include="$sourceRoot\WindowPlacementState.cs" Link="WindowPlacementState.cs" />
     <Compile Include="$sourceRoot\WindowPlacementStore.cs" Link="WindowPlacementStore.cs" />
   </ItemGroup>

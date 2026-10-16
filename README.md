@@ -83,8 +83,14 @@ change Windows scaling, it keeps its logical size at the monitor's current DPI.
 Window placement is saved separately from audio settings, including when I hide
 the app in the tray.
 
-Each app appears as a simple row without a card or Remove button. Its live
-session peak meter overlays the volume slider, with a -60 to 0 dBFS display range.
+Each app appears as a simple row without a card. Hover over its name to reveal
+an **X** with the **Hide** tooltip; keyboard focus reveals it too. Hiding an app
+excludes it from the list and automatic volume lowering. **Hidden apps** in
+Apps & startup opens a scrollable list with an X per app (**Show**) to bring it
+back. The panel stays open while I restore apps and shows **No hidden apps.**
+when empty. These choices are saved immediately.
+
+Each row's live session peak meter overlays the volume slider, with a -60 to 0 dBFS display range.
 The **Settings** cog at the top opens a sliding pane on the right, widening the
 window while keeping the main view compact. Settings scroll independently.
 Click the cog again to close the pane and return to the narrow window.
@@ -116,15 +122,14 @@ from -60 to 0 dBFS in 0.1 dB steps. Lower values detect quieter sounds; higher
 values require louder sounds. It applies to the signal after Sensitivity gain.
 The meter marker and threshold label follow the selected value. Changes take
 effect while listening and are saved immediately across restarts. **Reset** restores
-the original threshold (about -34.9 dBFS); existing settings keep that default.
+the default threshold (about -34.9 dBFS).
 
 **Hysteresis (dB)** separates the trigger and release thresholds. With the default
 6 dB gap, a -35 dBFS trigger stays active through dips down to -41 dBFS. Only
 sound below the release threshold starts the pause before fade back. This avoids
 repeated transitions when the microphone level hovers around the trigger. The
 gap is adjustable from 0 to 12 dB and saved immediately; 0 restores a single
-threshold. Existing settings gain the 6 dB default without changing their other
-values. The release threshold is shown below the control.
+threshold. The release threshold is shown below the control.
 
 **Microphone** lets me select an active input or use the Windows communications
 default; the main window shows the actual device in use. Selecting another input

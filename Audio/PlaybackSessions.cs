@@ -17,7 +17,10 @@ using NAudio.CoreAudioApi.Interfaces;
 
 namespace VoiceDucker.Audio;
 
-// Tracks only session levels changed by VoiceDucker, across active playback devices.
+/// <summary>
+/// Tracks only session levels changed by VoiceDucker, across active playback devices.
+/// A user mixer edit ends ownership; restoring audio must never undo that edit.
+/// </summary>
 internal sealed class PlaybackSessions : IDisposable
 {
     private const float AudiblePeak = 0.001f;
@@ -29,8 +32,10 @@ internal sealed class PlaybackSessions : IDisposable
 
     public bool HasOwnedSessions => _saved.Count > 0;
 
-    // shouldDuck: whether microphone input currently exceeds the voice gate.
-    // Returns the number of audio sessions whose lowered level is still owned.
+    /// <summary>
+    /// Advances fades and returns the number of lowered sessions still owned by the app.
+    /// Existing owned sessions are handled before eligibility checks so exclusions can restore them.
+    /// </summary>
     public int Update(bool shouldDuck, DuckingSettings settings, bool restoreImmediately = false)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -152,6 +157,10 @@ internal sealed class PlaybackSessions : IDisposable
         return owned;
     }
 
+    /// <summary>
+    /// Restores only levels the app still owns, immediately on Disable or with an exit fade.
+    /// Runs on the audio worker; it must not block the UI thread directly.
+    /// </summary>
     public void RestoreAll(int fadeMilliseconds)
     {
         if (fadeMilliseconds == 0)
@@ -195,6 +204,8 @@ internal sealed class PlaybackSessions : IDisposable
         return spotify;
     }
 
+    // Expected is the last value written by this app, not simply the current fade target.
+    // Comparing it with the Windows mixer detects external edits before another write.
     private sealed class SavedVolume(float original, float target, long startTick, int duration)
     {
         public float Original { get; } = original;

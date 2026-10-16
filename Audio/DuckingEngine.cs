@@ -17,6 +17,10 @@ using NAudio.Wave;
 
 namespace VoiceDucker.Audio;
 
+/// <summary>
+/// Owns microphone capture and playback restoration on a dedicated audio worker.
+/// Construction does not capture audio; only an explicit Start opens the microphone.
+/// </summary>
 internal sealed class DuckingEngine : IDisposable
 {
     private readonly object _stateLock = new();
@@ -109,6 +113,10 @@ internal sealed class DuckingEngine : IDisposable
         Stop(2000);
     }
 
+    /// <summary>
+    /// Keeps capture and session objects on the worker and restores owned levels on every exit.
+    /// The capture callback supplies levels; the worker applies settings, fades and status updates.
+    /// </summary>
     private void Run(ManualResetEventSlim stop)
     {
         PlaybackSessions? playback = null;

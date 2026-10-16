@@ -13,6 +13,10 @@
 
 namespace VoiceDucker.Audio;
 
+/// <summary>
+/// Turns microphone RMS levels into a signal gate with hysteresis and a release delay.
+/// This detects sound level, not words. The capture callback and worker share its lock.
+/// </summary>
 internal sealed class VoiceGate
 {
     private readonly object _sync = new();
@@ -31,14 +35,27 @@ internal sealed class VoiceGate
 
     public double Threshold
     {
-        get { lock (_sync) return _threshold; }
+        get
+        {
+            lock (_sync)
+            {
+                return _threshold;
+            }
+        }
         set
         {
             if (!double.IsFinite(value) || value is < 0.001 or > 1)
+            {
                 throw new ArgumentOutOfRangeException(nameof(value));
+            }
+
             lock (_sync)
             {
-                if (_threshold == value) return;
+                if (_threshold == value)
+                {
+                    return;
+                }
+
                 _threshold = value;
                 EvaluateLevel();
             }
@@ -47,44 +64,79 @@ internal sealed class VoiceGate
 
     public int HysteresisDecibels
     {
-        get { lock (_sync) return _hysteresisDecibels; }
+        get
+        {
+            lock (_sync)
+            {
+                return _hysteresisDecibels;
+            }
+        }
         set
         {
             if (value is < 0 or > 12)
+            {
                 throw new ArgumentOutOfRangeException(nameof(value));
+            }
+
             lock (_sync)
             {
-                if (_hysteresisDecibels == value) return;
+                if (_hysteresisDecibels == value)
+                {
+                    return;
+                }
+
                 _hysteresisDecibels = value;
                 EvaluateLevel();
             }
         }
     }
 
+    /// <summary>
+    /// Applies live settings together. Unchanged thresholds must not renew the release delay.
+    /// </summary>
     public void Configure(DuckingSettings settings)
     {
-        if (!settings.IsValid) throw new ArgumentOutOfRangeException(nameof(settings));
+        if (!settings.IsValid)
+        {
+            throw new ArgumentOutOfRangeException(nameof(settings));
+        }
+
         lock (_sync)
         {
             var threshold = settings.GetThresholdAmplitude();
-            var thresholdsChanged = _threshold != threshold || _hysteresisDecibels != settings.HysteresisDecibels;
+            var triggerChanged = _threshold != threshold;
+            var hysteresisChanged = _hysteresisDecibels != settings.HysteresisDecibels;
+
             _threshold = threshold;
             _hysteresisDecibels = settings.HysteresisDecibels;
             _holdMilliseconds = settings.RestoreDelayMilliseconds;
-            if (thresholdsChanged) EvaluateLevel();
+
+            if (triggerChanged || hysteresisChanged)
+            {
+                EvaluateLevel();
+            }
         }
     }
 
     public int HoldMilliseconds
     {
-        get { lock (_sync) return _holdMilliseconds; }
+        get
+        {
+            lock (_sync)
+            {
+                return _holdMilliseconds;
+            }
+        }
         set
         {
             if (value is < 0 or > 10000)
             {
                 throw new ArgumentOutOfRangeException(nameof(value));
             }
-            lock (_sync) _holdMilliseconds = value;
+            lock (_sync)
+            {
+                _holdMilliseconds = value;
+            }
         }
     }
 
@@ -97,12 +149,23 @@ internal sealed class VoiceGate
         }
     }
 
-    // Called with _sync held. Only a new observation or changed thresholds renews the hold.
+    /// <summary>
+    /// Reclassifies the last sample while the caller holds _sync.
+    /// Only a new observation or changed thresholds can renew the release delay.
+    /// </summary>
     private void EvaluateLevel()
     {
-        var releaseThreshold = _threshold * Math.Pow(10, -_hysteresisDecibels / 20.0);
-        _signalActive = _latestRms >= _threshold || (_signalActive && _latestRms >= releaseThreshold);
-        if (_signalActive) _lastLoudTick = _clock();
+        var releaseRatio = Math.Pow(10, -_hysteresisDecibels / 20.0);
+        var releaseThreshold = _threshold * releaseRatio;
+        var aboveTrigger = _latestRms >= _threshold;
+        var heldByHysteresis = _signalActive && _latestRms >= releaseThreshold;
+
+        _signalActive = aboveTrigger || heldByHysteresis;
+
+        if (_signalActive)
+        {
+            _lastLoudTick = _clock();
+        }
     }
 
     public bool IsSpeaking
@@ -111,8 +174,18 @@ internal sealed class VoiceGate
         {
             lock (_sync)
             {
-                return _signalActive || (_holdMilliseconds > 0 && _lastLoudTick >= 0 &&
-                    _clock() - _lastLoudTick <= _holdMilliseconds);
+                if (_signalActive)
+                {
+                    return true;
+                }
+
+                if (_holdMilliseconds <= 0 || _lastLoudTick < 0)
+                {
+                    return false;
+                }
+
+                var elapsedSinceLoudSound = _clock() - _lastLoudTick;
+                return elapsedSinceLoudSound <= _holdMilliseconds;
             }
         }
     }

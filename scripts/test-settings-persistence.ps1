@@ -26,6 +26,7 @@ $sourceRoot = [System.Security.SecurityElement]::Escape($projectRoot)
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$sourceRoot\AtomicJsonFile.cs" Link="AtomicJsonFile.cs" />
     <Compile Include="$sourceRoot\SettingsStore.cs" Link="SettingsStore.cs" />
     <Compile Include="$sourceRoot\Audio\DuckingSettings.cs" Link="DuckingSettings.cs" />
     <Compile Include="$sourceRoot\Audio\PlaybackIdentity.cs" Link="PlaybackIdentity.cs" />
@@ -129,15 +130,10 @@ Check(!SettingsStore.Load(path, out error).IsProcessExcluded("Spotify"),
     "Restoring a hidden process did not survive reloading settings.");
 Check(!File.Exists(path + ".tmp"), "A successful save left its temporary file behind.");
 
-File.WriteAllText(path, "{\"ReductionPercent\":42,\"FadeDownMilliseconds\":200,\"FadeUpMilliseconds\":10000}");
-Check(SameSettings(SettingsStore.Load(path, out error), new DuckingSettings(42, 200, 10000, false))
-    && error is null, "Existing settings files are no longer compatible.");
-var legacy = SettingsStore.Load(path, out error);
-Check(legacy.MicrophoneDeviceId == "" && legacy.RestoreDelayMilliseconds == 650,
-    "Legacy settings did not retain the communications microphone and 650 ms pause defaults.");
-Check(Math.Abs(legacy.GetThresholdAmplitude() - 0.018) < 1e-15,
-    "Legacy settings changed the original detection threshold.");
-Check(legacy.HysteresisDecibels == 6, "Existing settings did not gain the default hysteresis gap.");
+var defaults = new DuckingSettings();
+SettingsStore.Save(defaults, path);
+Check(SameSettings(SettingsStore.Load(path, out error), defaults) && error is null,
+    "Current defaults did not survive saving and reloading.");
 
 File.WriteAllText(path, "invalid JSON");
 Check(SameSettings(SettingsStore.Load(path, out error), new DuckingSettings()) && error is not null,
@@ -286,7 +282,7 @@ foreach (var gap in new[] { 0, 12 })
     Check(SameSettings(SettingsStore.Load(path, out error), boundary) && error is null,
         "A valid hysteresis boundary did not survive a settings reload.");
 }
-Console.WriteLine("PASS: persistence, legacy defaults, validation and pause behavior; hysteresis quiet startup, trigger/release boundaries, jitter, timed release, no reopening inside the band, live threshold/gap changes and disabled mode. No microphone or playback capture.");
+Console.WriteLine("PASS: persistence, current defaults, validation and pause behavior; hysteresis quiet startup, trigger/release boundaries, jitter, timed release, no reopening inside the band, live threshold/gap changes and disabled mode. No microphone or playback capture.");
 '@ | Set-Content -LiteralPath (Join-Path $testRoot 'Program.cs') -Encoding utf8
 
 & dotnet build (Join-Path $testRoot 'PersistenceTests.csproj') -c Release -p:ImportDirectoryBuildProps=false --nologo

@@ -8,6 +8,10 @@ using Windows.Graphics;
 
 namespace VoiceDucker;
 
+/// <summary>
+/// Restores layout against the current desktop and debounces subsequent layout saves.
+/// Monitor and DPI fallbacks handle hardware changes, not older application versions.
+/// </summary>
 internal sealed class WindowPlacementService : IDisposable
 {
     private readonly AppWindow _window;
@@ -100,6 +104,10 @@ internal sealed class WindowPlacementService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Captures normal bounds while the HWND is valid. Minimized bounds are never saved.
+    /// A maximized window retains the normal rectangle needed for a later Restore action.
+    /// </summary>
     private void Capture()
     {
         if (_window.Presenter is not OverlappedPresenter presenter ||

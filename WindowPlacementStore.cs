@@ -4,6 +4,10 @@ using System.Text.Json;
 
 namespace VoiceDucker;
 
+/// <summary>
+/// Persists window layout separately from audio preferences.
+/// Display adaptation belongs to WindowPlacementState, not to file storage.
+/// </summary>
 internal static class WindowPlacementStore
 {
     internal static readonly string FilePath = Path.Combine(
@@ -13,29 +17,23 @@ internal static class WindowPlacementStore
     public static WindowPlacementState? Load(string? path = null)
     {
         path ??= FilePath;
-        if (!File.Exists(path)) return null;
+
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
         var state = JsonSerializer.Deserialize<WindowPlacementState>(File.ReadAllText(path));
         return state is { IsValid: true } ? state : null;
     }
 
     public static void Save(WindowPlacementState state, string? path = null)
     {
-        if (!state.IsValid) throw new ArgumentException("Invalid window placement.", nameof(state));
-        path ??= FilePath;
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var temporaryPath = path + ".tmp";
-        try
+        if (!state.IsValid)
         {
-            using (var stream = new FileStream(temporaryPath, FileMode.Create, FileAccess.Write, FileShare.None))
-            {
-                JsonSerializer.Serialize(stream, state);
-                stream.Flush(flushToDisk: true);
-            }
-            File.Move(temporaryPath, path, overwrite: true);
+            throw new ArgumentException("Invalid window placement.", nameof(state));
         }
-        finally
-        {
-            if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
-        }
+
+        AtomicJsonFile.Write(path ?? FilePath, state);
     }
 }
