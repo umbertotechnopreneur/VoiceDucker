@@ -37,12 +37,12 @@ VBWR E -->
                        TextWrapping="Wrap" TextAlignment="Center" />
             <Border Background="#263B50" RequestedTheme="Dark" CornerRadius="10" Padding="14">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="Part of VibeWare" FontWeight="SemiBold"
+                    <TextBlock Text="This is VibeWare" FontWeight="SemiBold"
                                Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-                    <TextBlock Text="Created by Umberto Giacobbi. Built with AI assistance and accountable human review."
+                    <TextBlock Text="I created VoiceDucker with AI assistance. I guide its development and remain responsible for checking the result. This app participates in the VibeWare initiative."
                                TextWrapping="Wrap" FontSize="12"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <HyperlinkButton Content="Read the VibeWare MANIFESTO ↗"
+                    <HyperlinkButton Content="Read the VibeWare manifesto"
                                      NavigateUri="https://umbertogiacobbi.biz/vibeware/manifesto"
                                      HorizontalAlignment="Left" Padding="0" FontSize="13" />
                 </StackPanel>

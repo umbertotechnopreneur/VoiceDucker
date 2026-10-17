@@ -18,13 +18,15 @@ using VoiceDucker.Audio;
 
 namespace VoiceDucker;
 
+/// <summary>
+/// Validates saved audio preferences and reports unreadable files to the caller.
+/// Loading defaults never enables microphone capture.
+/// </summary>
 internal static class SettingsStore
 {
     private static readonly string SettingsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "VibeWare", "VoiceDucker", "settings.json");
-
-    public static bool HasSavedSettings => File.Exists(SettingsPath);
 
     public static DuckingSettings Load(out string? error) => Load(SettingsPath, out error);
 
@@ -62,24 +64,6 @@ internal static class SettingsStore
             throw new ArgumentOutOfRangeException(nameof(settings));
         }
 
-        var directory = Path.GetDirectoryName(settingsPath)!;
-        Directory.CreateDirectory(directory);
-        var temporaryPath = settingsPath + ".tmp";
-        try
-        {
-            using (var stream = new FileStream(temporaryPath, FileMode.Create, FileAccess.Write, FileShare.None))
-            {
-                JsonSerializer.Serialize(stream, settings);
-                stream.Flush(flushToDisk: true);
-            }
-            File.Move(temporaryPath, settingsPath, true);
-        }
-        finally
-        {
-            if (File.Exists(temporaryPath))
-            {
-                File.Delete(temporaryPath);
-            }
-        }
+        AtomicJsonFile.Write(settingsPath, settings);
     }
 }

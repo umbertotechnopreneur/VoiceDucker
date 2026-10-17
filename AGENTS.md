@@ -23,6 +23,8 @@ network calls or startup registration without a request.
 
 - Read `README.md` and inspect Git status before editing.
 - Keep generated outputs and logs out of Git. Pin package versions.
+- Do not add migration paths or compatibility branches solely for older app versions.
+  Keep current user choices and runtime safety checks; they are not legacy support.
 - Build after code edits and state separately whether an interactive microphone
   and playback test was actually performed.
 - Work on topic branches and propose pull requests for `main`. The repository

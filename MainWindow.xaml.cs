@@ -12,21 +12,21 @@
  * License: MIT
  * VBWR E */
 
-using System.Globalization;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
-using Microsoft.UI.Xaml.Media.Imaging;
 using VoiceDucker.Audio;
 using Windows.Foundation;
-using Windows.Graphics;
-using Windows.Storage.Streams;
 using Windows.UI;
 
 namespace VoiceDucker;
 
+/// <summary>
+/// Coordinates the window, engine lifetime and desktop integration.
+/// Settings and playback-row presentation live in the matching partial files.
+/// </summary>
 public sealed partial class MainWindow : Window
 {
     private readonly DuckingEngine _engine;
@@ -35,6 +35,7 @@ public sealed partial class MainWindow : Window
     private AboutWindow? _aboutWindow;
     private CloseChoiceWindow? _closeChoice;
     private bool _settingsReady;
+    private Expander? _openSettingsExpander;
     private bool _allowClose;
     private bool _micLedActive;
     private readonly Storyboard _micLedPulse = new();
@@ -45,37 +46,20 @@ public sealed partial class MainWindow : Window
     private bool _refreshingStreamRows;
     private bool _refreshingMicrophones;
     private bool _microphoneOperationPending;
+    private bool _microphoneMeterRunning;
+    private bool _microphoneDetectionActive;
+    private double _microphoneMeterRms;
+    private readonly CancellationTokenSource _lifetime = new();
+    private readonly WindowPlacementService _windowPlacement;
+    private readonly bool _restoredWindowPlacement;
 
     public MainWindow()
     {
         InitializeComponent();
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
 
-        var pulse = new DoubleAnimation
-        {
-            From = 0.15,
-            To = 1,
-            Duration = new Duration(TimeSpan.FromMilliseconds(900)),
-            AutoReverse = true,
-            RepeatBehavior = RepeatBehavior.Forever,
-            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
-        };
-        Storyboard.SetTarget(pulse, MicStatusIcon);
-        Storyboard.SetTargetProperty(pulse, "Opacity");
-        _micLedPulse.Children.Add(pulse);
-
-        var mixerPulse = new DoubleAnimation
-        {
-            From = 0,
-            To = 1,
-            Duration = new Duration(TimeSpan.FromMilliseconds(900)),
-            AutoReverse = true,
-            RepeatBehavior = RepeatBehavior.Forever,
-            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
-        };
-        Storyboard.SetTarget(mixerPulse, MixerOnImage);
-        Storyboard.SetTargetProperty(mixerPulse, "Opacity");
-        _mixerPulse.Children.Add(mixerPulse);
+        AddOpacityPulse(_micLedPulse, MicStatusIcon, minimumOpacity: 0.15);
+        AddOpacityPulse(_mixerPulse, MixerOnImage, minimumOpacity: 0);
 
         _settings = SettingsStore.Load(out var settingsError);
         _engine = new DuckingEngine(_settings);
@@ -86,15 +70,20 @@ public sealed partial class MainWindow : Window
         OtherSourcesCheckBox.IsChecked = _settings.IncludeOtherSources;
         SensitivitySlider.Value = _settings.MicrophoneGainDecibels;
         UpdateSensitivityLabel();
-        var thresholdDb = 20 * Math.Log10(VoiceGate.Threshold);
-        var thresholdPosition = Math.Clamp((thresholdDb + 60) / 60, 0, 1);
-        ThresholdBeforeColumn.Width = new GridLength(thresholdPosition, GridUnitType.Star);
-        ThresholdAfterColumn.Width = new GridLength(1 - thresholdPosition, GridUnitType.Star);
-        MicrophoneThresholdText.Text = $"Threshold {thresholdDb:0.0} dBFS";
+        ThresholdSlider.Value = _settings.ThresholdDecibels;
+        HysteresisBox.Value = _settings.HysteresisDecibels;
+        UpdateThresholdDisplay();
         RefreshHiddenApps();
         _settingsReady = true;
         FeedbackText.Text = settingsError ?? string.Empty;
         RefreshMicrophoneChoices();
+
+        _windowPlacement = new WindowPlacementService(this, () => SettingsSplitView.IsPaneOpen,
+            message => FeedbackText.Text = message);
+        _restoredWindowPlacement = _windowPlacement.TryRestore(out var settingsPaneOpen);
+        SettingsSplitView.IsPaneOpen = settingsPaneOpen;
+        SettingsButton.IsChecked = settingsPaneOpen;
+        _windowPlacement.SizeChanged += UpdateSettingsPaneWidth;
 
         StartupCheckBox.IsEnabled = false;
 
@@ -102,12 +91,33 @@ public sealed partial class MainWindow : Window
         AppWindow.Closing += OnWindowClosing;
         RootPanel.Loaded += OnRootLoaded;
         Closed += OnClosed;
+        _ = RemindWhenMonitoringIsOffAsync();
+    }
+
+    internal void ShowForRepeatedLaunch()
+    {
+        if (_tray is null)
+        {
+            Activate();
+        }
+        else
+        {
+            _tray.ShowWindow();
+        }
+
+        ExistingInstanceNotice.IsOpen = true;
+        MainScrollViewer.ChangeView(null, 0, null);
     }
 
     private async void OnRootLoaded(object sender, RoutedEventArgs args)
     {
         RootPanel.Loaded -= OnRootLoaded;
-        WindowContentSizing.Fit(this, RootPanel, 520);
+        if (!_restoredWindowPlacement)
+        {
+            FitMainWindow(preservePosition: false);
+        }
+
+        UpdateSettingsPaneWidth();
         try
         {
             _playbackMonitor = new PlaybackMonitor();
@@ -115,12 +125,12 @@ public sealed partial class MainWindow : Window
             _streamTimer.Tick += (_, _) => RefreshStreamRows();
             RefreshStreamRows();
             _streamTimer.Start();
-
         }
         catch (Exception exception)
         {
             FeedbackText.Text = $"Audio streams could not be listed: {exception.Message}";
         }
+        _windowPlacement.StartTracking();
         try
         {
             var handle = WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -137,7 +147,7 @@ public sealed partial class MainWindow : Window
         }
         try
         {
-            await StartupRegistration.InitializeDefaultAsync(SettingsStore.HasSavedSettings);
+            await StartupRegistration.InitializeDefaultAsync();
             StartupCheckBox.IsChecked = await StartupRegistration.IsEnabledAsync();
         }
         catch (Exception exception)
@@ -150,14 +160,57 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void AdvancedOptionsExpander_SizeChanged(object sender, SizeChangedEventArgs args)
+    private void SettingsExpander_Expanding(Expander sender, ExpanderExpandingEventArgs args)
     {
-        if (RootPanel.IsLoaded && args.NewSize.Height != args.PreviousSize.Height)
+        if (_openSettingsExpander != sender)
         {
-            // Fit after the expander has laid out its expanded or collapsed content.
-            DispatcherQueue.TryEnqueue(() =>
-                WindowContentSizing.Fit(this, RootPanel, 520, preservePosition: true));
+            if (_openSettingsExpander is not null) _openSettingsExpander.IsExpanded = false;
+            _openSettingsExpander = sender;
         }
+    }
+
+    private async Task RemindWhenMonitoringIsOffAsync()
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(15), _lifetime.Token);
+            if (!_engine.IsRunning)
+            {
+                _tray?.ShowNotification("Monitoring is off",
+                    "VoiceDucker is not monitoring your microphone. Press Enable when you're ready.");
+            }
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+            // The application closed before the one-time startup reminder was due.
+        }
+        catch (Exception exception)
+        {
+            FeedbackText.Text = $"Monitoring reminder could not be shown: {exception.Message}";
+        }
+    }
+
+    private void SettingsButton_Click(object sender, RoutedEventArgs args)
+    {
+        SettingsSplitView.IsPaneOpen = SettingsButton.IsChecked == true;
+        FitMainWindow();
+        _windowPlacement.SaveNow();
+    }
+
+    private void FitMainWindow(bool preservePosition = true)
+    {
+        if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Restored })
+        {
+            WindowContentSizing.Fit(this, RootPanel, 520, preservePosition: preservePosition,
+                additionalWidth: SettingsSplitView.IsPaneOpen ? 520 : 0);
+        }
+        UpdateSettingsPaneWidth();
+    }
+
+    private void UpdateSettingsPaneWidth()
+    {
+        var scale = Math.Max(0.1, RootPanel.XamlRoot?.RasterizationScale ?? 1);
+        SettingsSplitView.OpenPaneLength = AppWindow.ClientSize.Width / scale / 2;
     }
 
     private async void ToggleButton_Click(object sender, RoutedEventArgs args) =>
@@ -166,9 +219,7 @@ public sealed partial class MainWindow : Window
     private async Task ToggleDuckingAsync()
     {
         if (_microphoneOperationPending) return;
-        _microphoneOperationPending = true;
-        ToggleButton.IsEnabled = false;
-        MicrophoneComboBox.IsEnabled = false;
+        SetMicrophoneOperationPending(true);
         try
         {
             if (_engine.IsRunning)
@@ -186,228 +237,24 @@ public sealed partial class MainWindow : Window
         }
         finally
         {
-            ToggleButton.IsEnabled = true;
-            MicrophoneComboBox.IsEnabled = true;
-            _microphoneOperationPending = false;
+            SetMicrophoneOperationPending(false);
         }
     }
 
-    private void SettingBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+
+    /// <summary>
+    /// Updates capture controls together so overlapping start, stop and input changes cannot race.
+    /// </summary>
+    private void SetMicrophoneOperationPending(bool pending)
     {
-        if (!_settingsReady)
-        {
-            return;
-        }
-
-        ApplyNumericSetting(sender, args.NewValue);
+        _microphoneOperationPending = pending;
+        ToggleButton.IsEnabled = !pending;
+        MicrophoneComboBox.IsEnabled = !pending;
     }
 
-    private void SettingBox_Loaded(object sender, RoutedEventArgs args)
-    {
-        var numberBox = (NumberBox)sender;
-        numberBox.ApplyTemplate();
-        AttachTextChanged(numberBox, numberBox);
-    }
-
-    private void AttachTextChanged(NumberBox numberBox, DependencyObject element)
-    {
-        if (element is TextBox input)
-        {
-            input.Tag = numberBox;
-            input.TextChanged -= SettingText_TextChanged;
-            input.TextChanged += SettingText_TextChanged;
-            return;
-        }
-
-        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(element); index++)
-        {
-            AttachTextChanged(numberBox, VisualTreeHelper.GetChild(element, index));
-        }
-    }
-
-    private void SettingText_TextChanged(object sender, TextChangedEventArgs args)
-    {
-        if (!_settingsReady || sender is not TextBox input || input.Tag is not NumberBox numberBox)
-        {
-            return;
-        }
-
-        // NumberBox.Value changes only on commit; save valid edits before focus leaves the field.
-        if (!double.TryParse(input.Text, NumberStyles.Float | NumberStyles.AllowThousands,
-                CultureInfo.CurrentCulture, out var value))
-        {
-            FeedbackText.Text = "Enter whole numbers within each setting's range.";
-            return;
-        }
-
-        ApplyNumericSetting(numberBox, value);
-    }
-
-    private void ApplyNumericSetting(NumberBox sender, double value)
-    {
-        if (!double.IsFinite(value) || value != Math.Round(value))
-        {
-            FeedbackText.Text = "Enter whole numbers within each setting's range.";
-            return;
-        }
-
-        if (value < sender.Minimum || value > sender.Maximum)
-        {
-            FeedbackText.Text = "Reduction: 0–100%; fade down: 0–5000 ms; wait: 0–10000 ms; fade back: 0–30000 ms.";
-            return;
-        }
-
-        var next = sender == ReductionBox
-            ? _settings with { ReductionPercent = (int)value }
-            : sender == FadeDownBox
-                ? _settings with { FadeDownMilliseconds = (int)value }
-                : sender == RestoreDelayBox
-                    ? _settings with { RestoreDelayMilliseconds = (int)value }
-                    : _settings with { FadeUpMilliseconds = (int)value };
-        _settings = next;
-        _engine.UpdateSettings(next);
-        SaveSettings();
-    }
-
-    private void OtherSourcesCheckBox_Click(object sender, RoutedEventArgs args)
-    {
-        if (!_settingsReady)
-        {
-            return;
-        }
-
-        _settings = _settings with { IncludeOtherSources = OtherSourcesCheckBox.IsChecked == true };
-        _engine.UpdateSettings(_settings);
-        SaveSettings();
-    }
-
-    private void SaveSettings()
-    {
-        try
-        {
-            SettingsStore.Save(_settings);
-            FeedbackText.Text = string.Empty;
-        }
-        catch (Exception exception)
-        {
-            FeedbackText.Text = $"Settings are active but could not be saved: {exception.Message}";
-        }
-    }
-
-    private void SensitivitySlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs args)
-    {
-        UpdateSensitivityLabel();
-        if (!_settingsReady) return;
-        _settings = _settings with { MicrophoneGainDecibels = (int)Math.Round(args.NewValue) };
-        _engine.UpdateSettings(_settings);
-        SaveSettings();
-    }
-
-    private void UpdateSensitivityLabel()
-    {
-        if (SensitivityValueText is not null && SensitivitySlider is not null)
-            SensitivityValueText.Text = $"{SensitivitySlider.Value:+0;-0;0} dB";
-    }
-
-    private void SensitivityReset_Click(object sender, RoutedEventArgs args) =>
-        SensitivitySlider.Value = 0;
-
-    private void MicrophoneComboBox_DropDownOpened(object sender, object args) =>
-        RefreshMicrophoneChoices();
-
-    private void RefreshMicrophoneChoices()
-    {
-        _refreshingMicrophones = true;
-        try
-        {
-            var choices = MicrophoneDevices.GetChoices().ToList();
-            var selected = choices.FirstOrDefault(choice => choice.Id == _settings.MicrophoneDeviceId);
-            if (selected is null)
-            {
-                // Keep a disconnected choice visible; never silently switch to another input.
-                selected = new MicrophoneChoice(_settings.MicrophoneDeviceId, "Unavailable microphone — choose another input");
-                choices.Add(selected);
-            }
-            MicrophoneComboBox.ItemsSource = choices;
-            MicrophoneComboBox.SelectedItem = selected;
-            if (!_engine.IsRunning)
-                MicrophoneNameText.Text = $"Microphone: {selected.Name}";
-        }
-        catch (Exception exception)
-        {
-            MicrophoneNameText.Text = "Microphone: device list unavailable";
-            FeedbackText.Text = $"Microphones could not be listed: {exception.Message}";
-        }
-        finally
-        {
-            _refreshingMicrophones = false;
-        }
-    }
-
-    private async void MicrophoneComboBox_SelectionChanged(object sender, SelectionChangedEventArgs args)
-    {
-        if (!_settingsReady || _refreshingMicrophones || _microphoneOperationPending ||
-            MicrophoneComboBox.SelectedItem is not MicrophoneChoice choice ||
-            choice.Id == _settings.MicrophoneDeviceId) return;
-
-        _microphoneOperationPending = true;
-        ToggleButton.IsEnabled = false;
-        MicrophoneComboBox.IsEnabled = false;
-        var restart = _engine.IsRunning;
-        try
-        {
-            if (restart)
-            {
-                await Task.Run(_engine.Stop);
-                if (_engine.IsRunning)
-                    throw new InvalidOperationException("The previous microphone has not stopped. The selection was kept unchanged.");
-            }
-            _settings = _settings with { MicrophoneDeviceId = choice.Id };
-            _engine.UpdateSettings(_settings);
-            SaveSettings();
-            MicrophoneNameText.Text = $"Microphone: {choice.Name}";
-            if (restart) _engine.Start();
-        }
-        catch (Exception exception)
-        {
-            RefreshMicrophoneChoices();
-            FeedbackText.Text = $"Microphone could not be changed: {exception.Message}";
-        }
-        finally
-        {
-            ToggleButton.IsEnabled = true;
-            MicrophoneComboBox.IsEnabled = true;
-            _microphoneOperationPending = false;
-        }
-    }
-
-    private async void StartupCheckBox_Click(object sender, RoutedEventArgs args)
-    {
-        StartupCheckBox.IsEnabled = false;
-        try
-        {
-            await StartupRegistration.SetEnabledAsync(StartupCheckBox.IsChecked == true);
-            StartupRegistration.SavePreferenceMarker();
-            FeedbackText.Text = string.Empty;
-        }
-        catch (Exception exception)
-        {
-            FeedbackText.Text = $"Windows startup could not be changed: {exception.Message}";
-            try
-            {
-                StartupCheckBox.IsChecked = await StartupRegistration.IsEnabledAsync();
-            }
-            catch
-            {
-                StartupCheckBox.IsChecked = false;
-            }
-        }
-        finally
-        {
-            StartupCheckBox.IsEnabled = true;
-        }
-    }
-
+    /// <summary>
+    /// Marshals worker status to the UI; no microphone or mixer work runs in this callback.
+    /// </summary>
     private void OnStatusChanged(EngineStatus status)
     {
         DispatcherQueue.TryEnqueue(() =>
@@ -424,11 +271,10 @@ public sealed partial class MainWindow : Window
             var meterFraction = Math.Clamp((microphoneDb + 60) / 60, 0, 1);
             MicrophoneLevelColumn.Width = new GridLength(meterFraction, GridUnitType.Star);
             MicrophoneEmptyColumn.Width = new GridLength(1 - meterFraction, GridUnitType.Star);
-            MicrophoneLevelHint.Text = !status.Running
-                ? "Press Enable to see your microphone level."
-                : rms >= VoiceGate.Threshold
-                    ? "Above threshold — sound detected"
-                    : "Below threshold";
+            _microphoneMeterRunning = status.Running;
+            _microphoneDetectionActive = status.Speaking;
+            _microphoneMeterRms = rms;
+            UpdateMicrophoneThresholdHint();
             MicrophoneLevelText.Text = !status.Running ? "Off" : rms <= 0 ? "−∞ dBFS" : $"{microphoneDb:0.0} dBFS";
 
             VisualStateText.Text = !status.Running ? "MIC OFF" :
@@ -459,243 +305,25 @@ public sealed partial class MainWindow : Window
         });
     }
 
-    private void RefreshStreamRows()
+
+    /// <summary>
+    /// Gives both microphone illustrations the same repeating opacity timing.
+    /// </summary>
+    private static void AddOpacityPulse(Storyboard storyboard, DependencyObject target, double minimumOpacity)
     {
-        if (_playbackMonitor is null)
+        var animation = new DoubleAnimation
         {
-            return;
-        }
-
-        IReadOnlyList<PlaybackStream> streams;
-        try
-        {
-            streams = _playbackMonitor.Read()
-                .Where(stream => !_settings.IsProcessExcluded(stream.Name)).ToArray();
-        }
-        catch (Exception exception)
-        {
-            FeedbackText.Text = $"Audio streams could not be refreshed: {exception.Message}";
-            return;
-        }
-
-        var present = streams.Select(stream => stream.Key).ToHashSet(StringComparer.Ordinal);
-        var layoutChanged = false;
-        foreach (var key in _streamRows.Keys.Where(key => !present.Contains(key)).ToArray())
-        {
-            StreamRows.Children.Remove(_streamRows[key].Card);
-            _streamRows.Remove(key);
-            layoutChanged = true;
-        }
-
-        _refreshingStreamRows = true;
-        try
-        {
-            foreach (var stream in streams.OrderByDescending(stream => stream.IsSpotify)
-                         .ThenBy(stream => stream.Name, StringComparer.OrdinalIgnoreCase))
-            {
-                if (!_streamRows.TryGetValue(stream.Key, out var row))
-                {
-                    row = CreateStreamRow(stream);
-                    _streamRows.Add(stream.Key, row);
-                    StreamRows.Children.Add(row.Card);
-                    _ = LoadStreamIconAsync(stream.ProcessId, stream.Key, row.Icon);
-                    layoutChanged = true;
-                }
-
-                var peak = stream.Muted ? 0 : Math.Clamp(stream.Peak, 0, 1);
-                row.Meter.Value = peak <= 0 ? 0 : Math.Clamp((20 * Math.Log10(peak) + 60) / 60 * 100, 0, 100);
-                row.Slider.IsEnabled = !stream.Muted;
-                if (!row.Interacting && row.Slider.FocusState == FocusState.Unfocused)
-                {
-                    row.Slider.Value = Math.Clamp(stream.Volume * 100, 0, 100);
-                    row.Percentage.Text = stream.Muted
-                        ? "MUTED"
-                        : $"{Math.Round(stream.Volume * 100):0}%";
-                }
-            }
-        }
-        finally
-        {
-            _refreshingStreamRows = false;
-        }
-
-        NoStreamsText.Visibility = streams.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (layoutChanged)
-        {
-            WindowContentSizing.Fit(this, RootPanel, 520, preservePosition: true);
-        }
-    }
-
-    private async Task LoadStreamIconAsync(int processId, string key, Image icon)
-    {
-        try
-        {
-            var png = await Task.Run(() => ProcessIcon.ReadPng(processId));
-            if (png is null)
-            {
-                return;
-            }
-
-            using var stream = new InMemoryRandomAccessStream();
-            using (var writer = new DataWriter(stream))
-            {
-                writer.WriteBytes(png);
-                await writer.StoreAsync();
-                writer.DetachStream();
-            }
-            stream.Seek(0);
-            var source = new BitmapImage();
-            await source.SetSourceAsync(stream);
-            if (_streamRows.TryGetValue(key, out var row) && ReferenceEquals(row.Icon, icon))
-            {
-                icon.Source = source;
-            }
-        }
-        catch (Exception)
-        {
-            // Protected or short-lived processes keep the generic app glyph.
-        }
-    }
-
-    private StreamRow CreateStreamRow(PlaybackStream stream)
-    {
-        var name = new TextBlock
-        {
-            Text = stream.IsSpotify ? "SPOTIFY" : stream.Name.ToUpperInvariant(),
-            FontFamily = new FontFamily("Consolas"),
-            FontSize = 13,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            VerticalAlignment = VerticalAlignment.Center
+            From = minimumOpacity,
+            To = 1,
+            Duration = new Duration(TimeSpan.FromMilliseconds(900)),
+            AutoReverse = true,
+            RepeatBehavior = RepeatBehavior.Forever,
+            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
         };
-        var percentage = new TextBlock
-        {
-            Text = $"{Math.Round(stream.Volume * 100):0}%",
-            FontFamily = new FontFamily("Consolas"),
-            FontSize = 13,
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Right
-        };
-        var title = new Grid { ColumnSpacing = 8 };
-        title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
-        title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(name, 1);
-        Grid.SetColumn(percentage, 2);
-        title.Children.Add(name);
-        title.Children.Add(percentage);
-        var icon = new Image { Width = 24, Height = 24, Stretch = Stretch.Uniform };
-        var iconPlaceholder = new FontIcon
-        {
-            Glyph = "\uE80A",
-            FontFamily = new FontFamily("Segoe Fluent Icons"),
-            FontSize = 16,
-            Opacity = 0.55
-        };
-        var iconLayer = new Grid { Width = 24, Height = 24, Margin = new Thickness(0, 0, 8, 0) };
-        iconLayer.Children.Add(iconPlaceholder);
-        iconLayer.Children.Add(icon);
-        title.Children.Add(iconLayer);
 
-        var slider = new Slider
-        {
-            Minimum = 0,
-            Maximum = 100,
-            StepFrequency = 1,
-            Value = Math.Clamp(stream.Volume * 100, 0, 100),
-            IsEnabled = !stream.Muted
-        };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(slider, $"{stream.Name} volume");
-        // Overlay the session peak on the slider track; volume remains independently draggable.
-        var meter = new ProgressBar
-        {
-            Minimum = 0, Maximum = 100, Value = 0, Height = 4,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(12, 0, 12, 0), IsHitTestVisible = false,
-            Foreground = new SolidColorBrush(Color.FromArgb(255, 246, 162, 76)),
-            Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0))
-        };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(meter, $"{stream.Name} audio level");
-        var volumeTrack = new Grid();
-        volumeTrack.Children.Add(slider);
-        volumeTrack.Children.Add(meter);
-        var panel = new StackPanel { Spacing = 6 };
-        panel.Children.Add(title);
-        panel.Children.Add(volumeTrack);
-        var row = new StreamRow(panel, slider, meter, percentage, icon);
-        slider.PointerPressed += (_, _) => row.Interacting = true;
-        slider.PointerReleased += (_, _) => row.Interacting = false;
-        slider.PointerCanceled += (_, _) => row.Interacting = false;
-        slider.ValueChanged += (_, args) =>
-        {
-            if (_refreshingStreamRows || _playbackMonitor is null)
-            {
-                return;
-            }
-
-            percentage.Text = $"{Math.Round(args.NewValue):0}%";
-            try
-            {
-                if (!_playbackMonitor.SetVolume(stream.Key, (float)(args.NewValue / 100)))
-                {
-                    FeedbackText.Text = "This audio stream has ended.";
-                }
-            }
-            catch (Exception exception)
-            {
-                FeedbackText.Text = $"Volume could not be changed: {exception.Message}";
-            }
-        };
-        return row;
-    }
-
-    private void SetProcessHidden(string processName, bool hidden)
-    {
-        var normalized = PlaybackIdentity.NormalizeProcessName(processName);
-        var names = _settings.BlacklistedProcesses.Where(name =>
-            !PlaybackIdentity.NormalizeProcessName(name).Equals(normalized, StringComparison.OrdinalIgnoreCase));
-        _settings = _settings with
-        {
-            BlacklistedProcesses = (hidden ? names.Append(normalized) : names)
-                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
-        };
-        _engine.UpdateSettings(_settings);
-        SaveSettings();
-        RefreshHiddenApps();
-        RefreshStreamRows();
-    }
-
-    private void RefreshHiddenApps()
-    {
-        HiddenAppsButton.Visibility = _settings.BlacklistedProcesses.Length > 0
-            ? Visibility.Visible : Visibility.Collapsed;
-        var panel = new StackPanel { Spacing = 8 };
-        panel.Children.Add(new TextBlock
-        {
-            Text = "Hidden apps are excluded from the list and automatic volume lowering.",
-            TextWrapping = TextWrapping.Wrap, MaxWidth = 280
-        });
-        foreach (var name in _settings.BlacklistedProcesses.Order(StringComparer.OrdinalIgnoreCase))
-        {
-            var restore = new Button { Content = $"Restore {name}" };
-            restore.Click += (_, _) =>
-            {
-                HiddenAppsButton.Flyout.Hide();
-                SetProcessHidden(name, false);
-            };
-            panel.Children.Add(restore);
-        }
-        HiddenAppsButton.Flyout = new Flyout { Content = panel };
-    }
-
-    private sealed class StreamRow(StackPanel card, Slider slider, ProgressBar meter,
-        TextBlock percentage, Image icon)
-    {
-        public StackPanel Card { get; } = card;
-        public Slider Slider { get; } = slider;
-        public ProgressBar Meter { get; } = meter;
-        public TextBlock Percentage { get; } = percentage;
-        public Image Icon { get; } = icon;
-        public bool Interacting { get; set; }
+        Storyboard.SetTarget(animation, target);
+        Storyboard.SetTargetProperty(animation, "Opacity");
+        storyboard.Children.Add(animation);
     }
 
     private void SetMicLedActive(bool active)
@@ -721,19 +349,23 @@ public sealed partial class MainWindow : Window
             };
             gradient.GradientStops.Add(new GradientStop
             {
-                Color = Color.FromArgb(255, 126, 24, 34), Offset = 0
+                Color = Color.FromArgb(255, 126, 24, 34),
+                Offset = 0
             });
             gradient.GradientStops.Add(new GradientStop
             {
-                Color = Color.FromArgb(255, 247, 112, 106), Offset = 0.39
+                Color = Color.FromArgb(255, 247, 112, 106),
+                Offset = 0.39
             });
             gradient.GradientStops.Add(new GradientStop
             {
-                Color = Color.FromArgb(255, 168, 38, 45), Offset = 0.71
+                Color = Color.FromArgb(255, 168, 38, 45),
+                Offset = 0.71
             });
             gradient.GradientStops.Add(new GradientStop
             {
-                Color = Color.FromArgb(255, 74, 14, 23), Offset = 1
+                Color = Color.FromArgb(255, 74, 14, 23),
+                Offset = 1
             });
             MicStatusIcon.Foreground = gradient;
         }
@@ -772,6 +404,7 @@ public sealed partial class MainWindow : Window
 
     private void OnWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
+        _windowPlacement.SaveNow();
         if (_allowClose)
         {
             return;
@@ -799,6 +432,7 @@ public sealed partial class MainWindow : Window
                 throw new InvalidOperationException("The tray icon is unavailable.");
             }
             _aboutWindow?.Close();
+            _windowPlacement.SaveNow();
             _tray.HideWindow();
         }
         catch (Exception exception)
@@ -810,12 +444,16 @@ public sealed partial class MainWindow : Window
 
     private void ExitApplication()
     {
+        _windowPlacement.SaveNow();
         _allowClose = true;
         Close();
     }
 
     private void OnClosed(object sender, WindowEventArgs args)
     {
+        _windowPlacement.SizeChanged -= UpdateSettingsPaneWidth;
+        _windowPlacement.Dispose();
+        _lifetime.Cancel();
         _micLedPulse.Stop();
         _mixerPulse.Stop();
         _streamTimer?.Stop();
@@ -826,5 +464,6 @@ public sealed partial class MainWindow : Window
         _aboutWindow?.Close();
         _closeChoice?.Close();
         _engine.Dispose();
+        _lifetime.Dispose();
     }
 }

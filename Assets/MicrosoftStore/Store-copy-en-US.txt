@@ -1,12 +1,24 @@
 DESCRIPTION
 
-You talk. The music turns down. You stop. It comes back. That's VoiceDucker.
+Keep your soundtrack. Give your voice the spotlight.
 
-VoiceDucker is a paid app with a 30-day trial. To continue using it after the trial ends, purchase VoiceDucker through Microsoft Store at the price shown in the Store.
+You talk. The music turns down. You stop. It comes back. That's VoiceDucker. Spotify, browser videos, and other Windows playback can make room for your voice without another trip to the volume slider.
 
-Talking to an AI assistant? On a call? Watching a video while music keeps you company? You shouldn't need to grab the volume slider every time you open your mouth. VoiceDucker gives your voice a little room.
+TALK TO AI. KEEP THE MUSIC.
+Chat naturally with an AI assistant while music or videos play in the background. When you speak, playback steps back. Your soundtrack stays. It just learns some manners.
 
-Put some audio on, pick your microphone, and press Enable. Spotify is included by default. Switch on "Also lower other apps" for other players and browsers. When the microphone picks up sound, their audio gets quieter. When things go quiet, it gently comes back. Your soundtrack stays. It just learns some manners.
+KEEP BROWSER AUDIO IN ITS PLACE.
+A tab starts playing while you're talking? Include other apps so browser playback can step back too, instead of drowning you out.
+
+YOUR DEMO, NOT YOUR PLAYLIST.
+Use VoiceDucker alongside OBS Studio, Microsoft Clipchamp, or other streaming and recording tools to keep unrelated Windows playback lower while you narrate a demo, tutorial, or stream.
+
+TAKE THE CALL, NOT THE VOLUME CONTROLS.
+Keep background music from competing with you during Zoom, Microsoft Teams, and similar meetings. Hide your meeting app if you want to leave its playback untouched.
+
+Put some audio on, pick your microphone, and press Enable. Spotify is included by default. Switch on "Also lower other apps" for other players and browsers. When the microphone picks up sound, their audio gets quieter. When things go quiet, it gently comes back. Opening a browser or joining a call alone does not trigger the volume drop.
+
+VoiceDucker controls Windows playback volume, not the recording software's internal mixer or audio tracks. What reaches a recording or audience depends on your capture source and audio routing. Check a short recording before your demo or stream.
 
 Choose how much the volume drops, how smoothly it fades, and how long it waits through little pauses. The green microphone meter helps you adjust sensitivity.
 
@@ -14,13 +26,16 @@ Your microphone starts off. Audio stays on your device, in memory: no recordings
 
 A native Windows 11 app built with WinUI 3, with ongoing attention to RAM, performance, and disk space.
 
+VoiceDucker is a paid app with a 30-day trial. To continue using it after the trial ends, purchase VoiceDucker through Microsoft Store at the price shown in the Store.
+
 SHORT DESCRIPTION
 
-Keep your music on. VoiceDucker turns it down when you speak and gently brings it back when you're done. Handy for calls, AI chats, and other audio playing in the background.
+Your voice takes the lead. VoiceDucker lowers Spotify and other Windows playback when you speak, then brings it back. Keep music on during AI chats, calls, demos and streams, without chasing the volume slider.
 
 PRODUCT FEATURES (one per field)
 
 Talk without chasing the volume slider.
+Keep background playback lower during AI chats, calls, demos and streams.
 Spotify by default; include other playing apps when you want.
 Choose your microphone and see its live level.
 Adjust sensitivity, volume reduction, and smooth fades.

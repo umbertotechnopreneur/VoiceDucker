@@ -5,7 +5,7 @@ VOICE TITLE
 Voice Ducker
 
 SHORT DESCRIPTION
-Keep your music on. When you speak, VoiceDucker turns it down. When you're done, it gently comes back. Handy for calls, chats with digital assistants, and videos playing in the background.
+Your voice takes the lead. VoiceDucker lowers Spotify and other Windows playback when you speak, then brings it back. Keep music on during AI chats, calls, demos and streams, without chasing the volume slider.
 
 KEYWORDS (enter each separately)
 audio ducking

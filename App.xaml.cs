@@ -11,36 +11,21 @@
  * License: MIT
  * VBWR E */
 
-using Windows.ApplicationModel;
-using Windows.ApplicationModel.Activation;
-using Windows.Foundation;
-using Windows.Foundation.Collections;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Controls.Primitives;
-using Microsoft.UI.Xaml.Data;
-using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Navigation;
-using Microsoft.UI.Xaml.Shapes;
 using System.Runtime.InteropServices;
-
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
 
 namespace VoiceDucker;
 
 /// <summary>
-/// Provides application-specific behavior to supplement the default Application class.
+/// Owns the application lifetime and enforces a single desktop instance.
 /// </summary>
 public partial class App : Application
 {
-    private static Mutex? _instanceMutex;
-    private Window? _window;
+    private SingleInstanceService? _singleInstance;
+    private MainWindow? _window;
 
     /// <summary>
-    /// Initializes the singleton application object.  This is the first line of authored code
-    /// executed, and as such is the logical equivalent of main() or WinMain().
+    /// Initializes the XAML application.
     /// </summary>
     public App()
     {
@@ -48,27 +33,39 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Invoked when the application is launched.
+    /// Starts the main window, or restores the existing tray window after a second launch.
     /// </summary>
     /// <param name="args">Details about the launch request and process.</param>
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
-        _instanceMutex = new Mutex(true, @"Local\VibeWare.VoiceDucker", out var firstInstance);
-        if (!firstInstance)
+        _singleInstance = new SingleInstanceService();
+        if (!_singleInstance.IsPrimary)
         {
-            _instanceMutex.Dispose();
-            _instanceMutex = null;
+            // Transfer foreground permission when the existing window is ready.
+            // The named event, rather than the window title, delivers activation.
             var existingWindow = FindWindow(null, "VoiceDucker");
             if (existingWindow != IntPtr.Zero)
             {
-                ShowWindow(existingWindow, 9); // SW_RESTORE also shows a window hidden in the tray.
-                SetForegroundWindow(existingWindow);
+                GetWindowThreadProcessId(existingWindow, out var processId);
+                _ = AllowSetForegroundWindow(processId);
             }
+            _singleInstance.RequestActivation();
+            _singleInstance.Dispose();
+            _singleInstance = null;
             Exit();
             return;
         }
 
         _window = new MainWindow();
+        _window.Closed += (_, _) =>
+        {
+            _window = null;
+            _singleInstance?.Dispose();
+            _singleInstance = null;
+        };
+        var dispatcher = _window.DispatcherQueue;
+        _singleInstance.Listen(() =>
+            dispatcher.TryEnqueue(() => _window?.ShowForRepeatedLaunch()));
         _window.Activate();
     }
 
@@ -76,10 +73,9 @@ public partial class App : Application
     private static extern IntPtr FindWindow(string? className, string windowName);
 
     [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool ShowWindow(IntPtr window, int command);
+    private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetForegroundWindow(IntPtr window);
+    private static extern bool AllowSetForegroundWindow(uint processId);
 }
