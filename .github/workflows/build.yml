@@ -50,12 +50,20 @@ jobs:
             runtime: win-arm64
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
+      - name: Check settings, window placement and single-instance behavior
+        if: matrix.architecture == 'x64'
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          ./scripts/test-settings-persistence.ps1
+          ./scripts/test-window-placement.ps1
+          ./scripts/test-single-instance.ps1
       - name: Clean and build portable app
         shell: pwsh
         run: ./scripts/build.ps1 -Architecture '${{ matrix.architecture }}' -Configuration Release
