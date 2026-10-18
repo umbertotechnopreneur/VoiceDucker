@@ -25,7 +25,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $folder 'VoiceDucker.exe'))) {
 }
 Copy-Item -LiteralPath (Join-Path $root 'README.md'), (Join-Path $root 'LICENSE') -Destination $folder
 New-Item -ItemType Directory -Force -Path (Join-Path $folder 'docs/screenshots') | Out-Null
-Copy-Item -LiteralPath (Join-Path $root 'docs/RELEASING.md') -Destination (Join-Path $folder 'docs')
+Copy-Item -LiteralPath (Join-Path $root 'docs/RELEASING.md'), (Join-Path $root 'docs/DEVELOPMENT.md') -Destination (Join-Path $folder 'docs')
 Copy-Item -LiteralPath (Join-Path $root 'docs/screenshots/main-window.png') -Destination (Join-Path $folder 'docs/screenshots')
 & python (Join-Path $PSScriptRoot 'collect-notices.py') --mode nuget --target $Runtime --output (Join-Path $folder 'third-party-notices')
 if ($LASTEXITCODE -ne 0) { throw 'Dependency notice collection failed.' }
