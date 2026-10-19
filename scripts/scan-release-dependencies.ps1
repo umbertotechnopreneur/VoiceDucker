@@ -23,10 +23,11 @@ $ErrorActionPreference = 'Stop'
 $root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $assetsFile = Join-Path $root 'artifacts/obj/project.assets.json'
 $appDirectory = Join-Path $root "artifacts/app/$Runtime"
+$runtimeConfigFile = Join-Path $appDirectory 'VoiceDucker.runtimeconfig.json'
 $archive = Join-Path $root "artifacts/VoiceDucker-$Runtime.zip"
 $report = Join-Path $root "artifacts/VoiceDucker-$Runtime.security-scan.txt"
 
-foreach ($requiredPath in @($assetsFile, $appDirectory, $archive)) {
+foreach ($requiredPath in @($assetsFile, $appDirectory, $runtimeConfigFile, $archive)) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {
         throw "Release scan input does not exist: $requiredPath"
     }
@@ -51,7 +52,26 @@ $assets = Get-Content -LiteralPath $assetsFile -Raw | ConvertFrom-Json
 $packageRoots = @($assets.packageFolders.PSObject.Properties.Name)
 $packages = @($assets.libraries.PSObject.Properties |
     Where-Object { $_.Value.type -eq 'package' } |
-    Sort-Object Name -Unique)
+    ForEach-Object {
+        [pscustomobject]@{
+            Name = $_.Name
+            Path = $_.Value.path
+        }
+    })
+
+$runtimeConfig = Get-Content -LiteralPath $runtimeConfigFile -Raw | ConvertFrom-Json
+$runtimeFramework = @($runtimeConfig.runtimeOptions.includedFrameworks |
+    Where-Object { $_.name -eq 'Microsoft.NETCore.App' })
+if ($runtimeFramework.Count -ne 1) {
+    throw 'The self-contained Microsoft.NETCore.App runtime could not be identified.'
+}
+$runtimePackageId = "Microsoft.NETCore.App.Runtime.$Runtime"
+$runtimeVersion = $runtimeFramework[0].version
+$packages += [pscustomobject]@{
+    Name = "$runtimePackageId/$runtimeVersion"
+    Path = "$($runtimePackageId.ToLowerInvariant())/$($runtimeVersion.ToLowerInvariant())"
+}
+$packages = @($packages | Sort-Object Name -Unique)
 if ($packages.Count -eq 0) {
     throw 'No restored NuGet packages were found in project.assets.json.'
 }
@@ -93,7 +113,7 @@ function Invoke-RequiredDefenderScan {
 foreach ($package in $packages) {
     $packageDirectory = $null
     foreach ($packageRoot in $packageRoots) {
-        $candidate = Join-Path $packageRoot $package.Value.path
+        $candidate = Join-Path $packageRoot $package.Path
         if (Test-Path -LiteralPath $candidate) {
             $packageDirectory = $candidate
             break
