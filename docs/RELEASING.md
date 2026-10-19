@@ -1,6 +1,6 @@
 # Releasing VoiceDucker
 
-The first public portable version is **0.1.0**, with tag **v0.1.0-stable**.
+The current public portable version is **0.1.1**, with tag **v0.1.1-stable**.
 The older 1.0.x values were development/MSIX build numbers. Do not install this
 portable release as a downgrade over an existing development MSIX.
 
@@ -24,8 +24,13 @@ companion files together. Packaging refuses to overwrite an existing ZIP.
 
 Open a pull request for source changes. The **Portable Windows ZIPs** workflow
 builds both architectures and checks archive integrity and SHA-256 checksums.
-After owner review, run it manually with `release=true`, `tag=v0.1.0-stable`,
+After owner review, run it manually with `release=true`, `tag=v0.1.1-stable`,
 and `draft=true`. Review both ZIPs and publish the draft when approved.
+Each Windows job scans the restored NuGet archives, their extracted files, the
+application output and final ZIP with Microsoft Defender. The generated scan
+reports record package sources, versions, SHA-256 values, scan command and result,
+and are attached to the release. A missing, disabled, failed or detecting scan
+blocks the workflow.
 A build, a passing archive check, and an interactive audio check are separate
 facts. ARM64 runtime behavior needs an ARM64 machine.
 
@@ -35,7 +40,7 @@ The release has no telemetry, signing certificate, or public MSIX package.
 ## WinGet
 
 Proposed package identifier: `UmbertoGiacobbi.VoiceDucker`. Use package version
-`0.1.0` and the exact final GitHub release asset URLs and SHA-256 hashes.
+`0.1.1` and the exact final GitHub release asset URLs and SHA-256 hashes.
 Windows x64 and ARM64 installers use `InstallerType: zip`,
 `NestedInstallerType: portable`, and `NestedInstallerFiles` pointing to
 `VoiceDucker.exe`, with command alias `voice-ducker`. Minimum Windows version:
@@ -43,7 +48,7 @@ Windows x64 and ARM64 installers use `InstallerType: zip`,
 
 Validate the version, locale and installer manifests with
 `winget validate --manifest <manifest-directory>`, then submit a pull request
-under `manifests/u/UmbertoGiacobbi/VoiceDucker/0.1.0/` in
+under `manifests/u/UmbertoGiacobbi/VoiceDucker/0.1.1/` in
 [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs).
 Do not advertise `winget install --id UmbertoGiacobbi.VoiceDucker --exact` as
 available until Microsoft merges and indexes the submission. The GitHub ZIPs
