@@ -26,6 +26,9 @@ $appDirectory = Join-Path $root "artifacts/app/$Runtime"
 $runtimeConfigFile = Join-Path $appDirectory 'VoiceDucker.runtimeconfig.json'
 $archive = Join-Path $root "artifacts/VoiceDucker-$Runtime.zip"
 $report = Join-Path $root "artifacts/VoiceDucker-$Runtime.security-scan.txt"
+$stageRoot = Join-Path $root "artifacts/security-scan-stage/$Runtime-$([Guid]::NewGuid().ToString('N'))"
+$packageArchiveStage = Join-Path $stageRoot 'nuget-archives'
+$releaseArchiveStage = Join-Path $stageRoot 'release-archive'
 
 foreach ($requiredPath in @($assetsFile, $appDirectory, $runtimeConfigFile, $archive)) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {
@@ -47,6 +50,8 @@ $defender = Get-ChildItem -LiteralPath $platformRoot -Directory |
 if (-not $defender) {
     throw 'MpCmdRun.exe was not found in the Microsoft Defender platform directory.'
 }
+
+New-Item -ItemType Directory -Path $packageArchiveStage, $releaseArchiveStage | Out-Null
 
 $assets = Get-Content -LiteralPath $assetsFile -Raw | ConvertFrom-Json
 $packageRoots = @($assets.packageFolders.PSObject.Properties.Name)
@@ -99,14 +104,17 @@ function Invoke-RequiredDefenderScan {
     Write-Host "Scanning $Label"
     $output = & $defender -Scan -ScanType 3 -File $Path 2>&1 | Out-String
     $exitCode = $LASTEXITCODE
+    $summary = ($output.Trim() -replace '\r?\n', ' | ')
     $lines.Add("Target: $Label")
     $lines.Add("Path: $Path")
     $lines.Add("Defender exit code: $exitCode")
+    $lines.Add("Defender output: $summary")
     $lines.Add('')
-    if ($exitCode -ne 0) {
+    if ($exitCode -ne 0 -or $output -match '(?i)\bwas skipped\b' -or
+            $output -notmatch '(?i)found no threats') {
         $lines | Set-Content -LiteralPath $report -Encoding utf8
         Write-Host $output
-        throw "Microsoft Defender did not complete cleanly for $Label (exit code $exitCode)."
+        throw "Microsoft Defender did not complete a clean scan for $Label (exit code $exitCode)."
     }
 }
 
@@ -137,12 +145,14 @@ foreach ($package in $packages) {
     $lines.Add("Package: $($package.Name)")
     $lines.Add("Official source: $($metadata.source)")
     $lines.Add("Archive SHA-256: $((Get-FileHash -LiteralPath $archiveFile.FullName -Algorithm SHA256).Hash.ToLowerInvariant())")
-    Invoke-RequiredDefenderScan -Label "$($package.Name) archive" -Path $archiveFile.FullName
+    Copy-Item -LiteralPath $archiveFile.FullName -Destination $packageArchiveStage
     Invoke-RequiredDefenderScan -Label "$($package.Name) extracted files" -Path $packageDirectory
 }
 
+Invoke-RequiredDefenderScan -Label 'downloaded NuGet archives' -Path $packageArchiveStage
 Invoke-RequiredDefenderScan -Label "$Runtime application files" -Path $appDirectory
-Invoke-RequiredDefenderScan -Label "$Runtime release archive" -Path $archive
+Copy-Item -LiteralPath $archive -Destination $releaseArchiveStage
+Invoke-RequiredDefenderScan -Label "$Runtime release archive" -Path $releaseArchiveStage
 $lines.Add('Result: clean; all targeted scans completed without detections.')
 $lines | Set-Content -LiteralPath $report -Encoding utf8
 Write-Host "Security scan report: $report"
