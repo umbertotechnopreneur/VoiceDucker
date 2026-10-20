@@ -171,7 +171,37 @@ try
     writer.SetVolume(0.71f, externalContext);
     Thread.Sleep(250);
     Check(events.Latest(key) == lastChange, "A disposed native subscription still accepted events.");
-    Console.WriteLine("PASS: real Core Audio callbacks, own/external EventContext, volume, mute, unmute and unregistration.");
+    // Exercise the production COM subscription lifetime without touching another app's mixer.
+    void ChurnSubscriptions(int count, List<WeakReference<NativePlaybackSession>>? references = null)
+    {
+        for (var index = 0; index < count; index++)
+        {
+            using var subscription = NativePlaybackSession.Open(endpoint.ID, id, events);
+            references?.Add(new WeakReference<NativePlaybackSession>(subscription));
+        }
+    }
+    void Collect()
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+    }
+    ChurnSubscriptions(100);
+    Collect();
+    using var process = Process.GetCurrentProcess();
+    process.Refresh();
+    var managedBefore = GC.GetTotalMemory(true);
+    var privateBefore = process.PrivateMemorySize64;
+    var handlesBefore = process.HandleCount;
+    var references = new List<WeakReference<NativePlaybackSession>>();
+    ChurnSubscriptions(1000, references);
+    Collect();
+    process.Refresh();
+    var managedAfter = GC.GetTotalMemory(true);
+    var alive = references.Count(reference => reference.TryGetTarget(out _));
+    Check(alive == 0, "Disposed production audio subscriptions remain rooted after collection.");
+    Console.WriteLine($"RESOURCE CHECK: 100 warmup + 1000 native subscribe/dispose cycles; retained subscriptions={alive}; managed bytes={managedBefore}->{managedAfter}; private bytes={privateBefore}->{process.PrivateMemorySize64}; handles={handlesBefore}->{process.HandleCount}. This is the test harness, not full-app RAM.");
+    Console.WriteLine("PASS: real Core Audio callbacks, own/external EventContext, volume, mute, unmute, unregistration and subscription resource churn.");
 }
 finally
 {

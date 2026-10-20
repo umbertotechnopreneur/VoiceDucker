@@ -1,0 +1,106 @@
+{
+  "evidence": [
+    {
+      "url": "https://github.com/umbertotechnopreneur/VoiceDucker/releases/download/v0.1.1-stable/VoiceDucker-win-x64.security-scan.txt",
+      "sha256": "e0377aa7b98720a65d7429fea9038b987ab87965088551530286f7c3d3587625"
+    },
+    {
+      "url": "https://github.com/umbertotechnopreneur/VoiceDucker/releases/download/v0.1.1-stable/VoiceDucker-win-arm64.security-scan.txt",
+      "sha256": "b4dbdfeb83607d829228e0ff9ab387aeb219a33109e660942748f4d4ccf7dad0"
+    }
+  ],
+  "packages": {
+    "Microsoft.NETCore.App.Runtime.win-x64/10.0.13": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "c66885d464697be75676b4d1fbca38b8806f3af01d65d27205b3f06add094444"
+    },
+    "Microsoft.Web.WebView2/1.0.3719.77": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "2f6be3a10a1a8d6d1fde986af4131dab344f8181fffe75590824e0f4b037ed73"
+    },
+    "Microsoft.Win32.SystemEvents/10.0.10": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "594440d8d212a19cc3043307ed89c971cfe2238ee29ea249b47323e341e15491"
+    },
+    "Microsoft.Windows.AI.MachineLearning/2.1.74": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "691165fa3c07a04b752cbf4a07e93ed13a418e9dea1ee89eb163d2225e2ba3af"
+    },
+    "Microsoft.Windows.SDK.BuildTools.MSIX/1.7.251221100": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "e61c560805029f5ae15433be52e153f3862b6faaf725292638a9ece592f7a060"
+    },
+    "Microsoft.Windows.SDK.BuildTools.WinApp/0.7.1": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "211e774cf742c32cd7fc70223d93d175b7b3c07666839b52a7bd39fc72d93323"
+    },
+    "Microsoft.Windows.SDK.BuildTools/10.0.28000.2705": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "8bfdfb6ca2633f531cf80b5fa22512ba61a394d7988f0970db83baadc67929ed"
+    },
+    "Microsoft.WindowsAppSDK.AI/2.5.5": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "108143ad35b20c8df7a885995ce4258e7c2e6ba74c9b60d2d819cbc46980b6fb"
+    },
+    "Microsoft.WindowsAppSDK.Base/2.0.4": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "e3e13478c4c80c59ed5f8f89542fe49a2985daa484753e93a5858e90c2d46a4d"
+    },
+    "Microsoft.WindowsAppSDK.DWrite/2.1.0": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "91746abd6a780b84001f9c465507830d5a24c79912bc4aa0d35938c71c1c6b5f"
+    },
+    "Microsoft.WindowsAppSDK.Foundation/2.3.12": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "ce04d01d68cb16b5dc85a5c9efb8162dba876bc2e5b766b5968979899d4efa9e"
+    },
+    "Microsoft.WindowsAppSDK.InteractiveExperiences/2.1.9": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "f9159d73e3e46717f159606e43b4acf8336aaff5bdd4d395fe3a93fdb41437ac"
+    },
+    "Microsoft.WindowsAppSDK.ML/2.1.94": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "549e92cd397b9d90ea9f08334db6c79dfa78fc49b47bd3d26a53eb1df2f21191"
+    },
+    "Microsoft.WindowsAppSDK.Runtime/2.5.1": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "2fbd27012291be50cafed6942306964281d37167af6a6af3887e1163ec5cf063"
+    },
+    "Microsoft.WindowsAppSDK.Search/2.5.5": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "b5876fe0091a6a14c34e46b5bc898621e80b5ed598f45574b90deb84bf33f023"
+    },
+    "Microsoft.WindowsAppSDK.Widgets/2.0.5": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "7f1b585ef8f012784d2cb91b86e809814ceccab74183a5979ef45db141779cb5"
+    },
+    "Microsoft.WindowsAppSDK.WinUI/2.3.9": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "d36145bd6c0f46fc04e07fb4af365d093fb42c39b625948d0ead07a0b26fce96"
+    },
+    "Microsoft.WindowsAppSDK/2.5.1": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "2e26de1253e2e2a288a75387523e2f8b402c05f117d42013df9875887a70933a"
+    },
+    "NAudio.Core/2.2.1": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "794645dbfd30e4880663d52d9d9224d55c301fa54228ff623c95d572c7887347"
+    },
+    "NAudio.Wasapi/2.2.1": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "c8396b8dbab86a2619edfd9158beaf18c21cb86677099b5594950fd8651b9d1a"
+    },
+    "System.Drawing.Common/10.0.10": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "9072478088456bdf8737cea29fcf58d8d0f1cb90b3febdac48e82e1508572add"
+    },
+    "System.Numerics.Tensors/9.0.0": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "b750243c36002a62b28b1ac5d3fbc284ad340ba1494cc36aca110611a0b1f959"
+    },
+    "Microsoft.NETCore.App.Runtime.win-arm64/10.0.13": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "063a553cf92d06124984006847f49b98d6006c29b08626b3dc1e79ea0de1f21f"
+    }
+  }
+}

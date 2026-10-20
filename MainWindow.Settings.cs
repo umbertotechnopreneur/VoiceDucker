@@ -247,7 +247,7 @@ public sealed partial class MainWindow
             _settings = _settings with { MicrophoneDeviceId = choice.Id };
             ApplyAndSaveSettings();
             MicrophoneNameText.Text = $"Microphone: {choice.Name}";
-            if (restart) _engine.Start();
+            if (restart && _licensing.CanUseApp) _engine.Start();
         }
         catch (Exception exception)
         {

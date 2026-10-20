@@ -28,7 +28,7 @@ on:
       tag:
         description: New tag matching the project version, optionally ending in -stable
         type: string
-        default: v0.1.0-stable
+        default: v0.2.0-stable
       draft:
         description: Create a draft for review
         type: boolean
@@ -55,7 +55,7 @@ jobs:
           python-version: "3.13"
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
       - name: Check settings, window placement, single-instance behavior and audio restoration
         if: matrix.architecture == 'x64'
         timeout-minutes: 5
@@ -71,16 +71,13 @@ jobs:
       - name: Create portable ZIP with documentation and license
         shell: pwsh
         run: ./scripts/package-portable.ps1 -Runtime '${{ matrix.runtime }}'
-      - name: Scan dependencies and release files with Microsoft Defender
-        shell: pwsh
-        run: ./scripts/scan-release-dependencies.ps1 -Runtime '${{ matrix.runtime }}'
       - uses: actions/upload-artifact@v7
         with:
           name: VoiceDucker-${{ matrix.runtime }}
           path: |
             artifacts/VoiceDucker-${{ matrix.runtime }}.zip
             artifacts/VoiceDucker-${{ matrix.runtime }}.zip.sha256
-            artifacts/VoiceDucker-${{ matrix.runtime }}.security-scan.txt
+            artifacts/VoiceDucker-${{ matrix.runtime }}.dependency-verification.txt
           if-no-files-found: error
 
   build:
@@ -144,8 +141,8 @@ jobs:
           if ($existing) { throw 'Tag already exists; existing releases are never overwritten.' }
           $files = @(Get-ChildItem artifacts/release -Filter 'VoiceDucker-win-*.zip' -File)
           if ($files.Count -ne 2) { throw 'Both architecture ZIPs are required.' }
-          $scanReports = @(Get-ChildItem artifacts/release -Filter 'VoiceDucker-win-*.security-scan.txt' -File)
-          if ($scanReports.Count -ne 2) { throw 'Both Defender scan reports are required.' }
+          $scanReports = @(Get-ChildItem artifacts/release -Filter 'VoiceDucker-win-*.dependency-verification.txt' -File)
+          if ($scanReports.Count -ne 2) { throw 'Both dependency verification reports are required.' }
           Get-Content artifacts/release/*.zip.sha256 | Set-Content artifacts/release/SHA256SUMS.txt -Encoding ascii
-          gh release create $env:RELEASE_TAG $files.FullName $scanReports.FullName artifacts/release/SHA256SUMS.txt --target $env:SOURCE_SHA --title "VoiceDucker $version" --generate-notes "--draft=$env:IS_DRAFT" --prerelease=false
+          gh release create $env:RELEASE_TAG $files.FullName $scanReports.FullName artifacts/release/SHA256SUMS.txt --target $env:SOURCE_SHA --title "VoiceDucker $version" --notes-file docs/releases/0.2.0.md "--draft=$env:IS_DRAFT" --prerelease=false
           if ($LASTEXITCODE -ne 0) { throw 'Release creation failed.' }

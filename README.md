@@ -8,6 +8,23 @@ It can lower browser videos and other Windows apps too.
 Useful for AI chats, Zoom or Teams calls, and demos or streams with
 OBS Studio, Microsoft Clipchamp, or similar tools.
 
+## What changed in 0.2.0
+
+Since 0.1.1, I improved the audio engine and reviewed its resource handling:
+
+- I now receive Windows volume and mute events, including while monitoring is off.
+  My own mixer writes are identified separately from external changes.
+- I improved fades and interrupted fades. Each session returns to the volume
+  captured when the app opened; repeated cycles no longer lower that baseline.
+- I release expired audio sessions during monitoring and unregister callbacks,
+  stop timers and release audio resources when the app closes.
+- I integrated the Store trial/license interface and fading footer links.
+  Portable builds remain unrestricted and MIT-licensed.
+- I corrected the WinGet packaging instructions and reviewed dependency scan
+  evidence, microphone privacy, diagnostics and memory/resource lifetime.
+
+See the [release notes](docs/releases/0.2.0.md) for checks and their limits.
+
 ## Start here
 
 1. On **Windows 11**, download a ZIP from [GitHub Releases](https://github.com/umbertotechnopreneur/VoiceDucker/releases).
@@ -79,27 +96,29 @@ changes; external changes do not replace the startup baseline.
 
 ### This is VibeWare · [Manifesto](https://umbertogiacobbi.biz/vibeware/manifesto)
 
-I am [Umberto Giacobbi](https://umbertogiacobbi.biz). I created VoiceDucker with
-AI assistance. I guide the work and remain responsible for checking functionality,
-performance, and security. VoiceDucker participates in the VibeWare initiative.
+I created VoiceDucker with AI assistance. I define its purpose, guide the implementation, and take responsibility for checking functionality, performance, and security. VibeWare is my initiative for building useful software openly with AI; I ask you to judge the result and the evidence behind it.
+
+To learn what VibeWare means and why I created it, read the [VibeWare manifesto](https://umbertogiacobbi.biz/vibeware/manifesto).
 
 [VoiceDucker on GitHub](https://github.com/umbertotechnopreneur/VoiceDucker) · [VibeWare on GitHub](https://github.com/umbertotechnopreneur/VibeWare) · [umbertogiacobbi.biz](https://umbertogiacobbi.biz)
 
-[MIT license](LICENSE) · [Terms](https://umbertogiacobbi.biz/terms/) · [Privacy](https://umbertogiacobbi.biz/privacy/)
+[Terms](https://umbertogiacobbi.biz/terms/) · [Privacy](https://umbertogiacobbi.biz/privacy/)
+
+*You are welcome to explore, adapt and reuse the open-source VibeWare materials under the project license — my contribution to the developer community.*
+
+The Microsoft Store edition uses the Store-managed 30-day trial and a one-time
+purchase at the price shown for your market (base US price: $1.99). The trial
+does not automatically charge you. Store license status and expiration govern
+access; the app stops monitoring and restores audio it still owns if access ends.
+Local development packages and the MIT portable distribution do not use Store
+licensing. This does not change the source license.
 
 ## External binary security policy
 
-Before including any third-party prebuilt binary or compiled library in this
-repository or its deliverables, including files supplied without source code,
-run an explicit targeted Microsoft Windows Defender scan of the downloaded
-package/archive and all extracted files and required dependencies that will be
-used. Keep them staged until the scan finishes; real-time protection alone is
-not enough.
-
-Proceed only after the scan completes without detections. Record the official
-source, version or SHA-256, scan command and result. An unavailable, disabled,
-failed or unfinished scan, or any detection, blocks import. Do not bypass a
-detection with exclusions, allowlisting, restored quarantine items or disabled
-protection without separate explicit owner approval.
-
-This rule applies to future imports; it does not certify existing dependencies.
+On first import of a new third-party binary or version, scan its official archive
+and staged extracted files with Microsoft Defender before use. Record its source,
+SHA-256, command and completed result; unavailable, failed or detecting scans block
+import. Reuse that evidence for unchanged imports. Builds and tests do not start
+scans, and generated application output is not an external import. Never bypass
+a detection with exclusions or disabled protection. This policy does not certify
+previously unverified dependencies.

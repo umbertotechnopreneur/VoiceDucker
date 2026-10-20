@@ -64,6 +64,8 @@ try {
     & dotnet restore $projectFile --locked-mode "-p:Platform=$Architecture" -p:SelfContained=true
     if ($LASTEXITCODE -ne 0) { throw 'Package restore failed.' }
 
+    & (Join-Path $PSScriptRoot 'verify-dependency-imports.ps1') -Runtime $runtime
+
     & dotnet publish $projectFile -c $Configuration "-p:Platform=$Architecture" `
         -p:SelfContained=true -p:PublishReadyToRun=false -p:PublishSingleFile=false `
         -r $runtime --no-restore -o $outputDirectory -m:8

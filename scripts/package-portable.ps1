@@ -29,6 +29,8 @@ Copy-Item -LiteralPath (Join-Path $root 'docs/RELEASING.md'), (Join-Path $root '
 Copy-Item -LiteralPath (Join-Path $root 'docs/screenshots/main-window.png') -Destination (Join-Path $folder 'docs/screenshots')
 & python (Join-Path $PSScriptRoot 'collect-notices.py') --mode nuget --target $Runtime --output (Join-Path $folder 'third-party-notices')
 if ($LASTEXITCODE -ne 0) { throw 'Dependency notice collection failed.' }
+New-Item -ItemType Directory -Force -Path (Join-Path $folder 'docs/releases') | Out-Null
+Copy-Item -LiteralPath (Join-Path $root 'docs/releases/0.2.0.md') -Destination (Join-Path $folder 'docs/releases')
 $zip = Join-Path $root "artifacts/VoiceDucker-$Runtime.zip"
 if (Test-Path -LiteralPath $zip) { throw "Refusing to overwrite an existing package: $zip" }
 Compress-Archive -Path (Join-Path $folder '*') -DestinationPath $zip

@@ -74,6 +74,10 @@ On a Windows workstation with a playback endpoint, run the native callback check
 pwsh -NoProfile -File scripts/test-volume-notifications.ps1
 ```
 
+This also measures resource lifetime across 100 warmup and 1,000 native callback
+subscribe/dispose cycles, reporting retained subscription objects, managed/private
+memory and process handles. These are harness measurements, not full-app RAM.
+
 This creates a silent session in the test process and changes only that session's
 volume and mute state. It checks actual Windows callbacks, context filtering and
 unregistration without opening the microphone or changing another app's audio.

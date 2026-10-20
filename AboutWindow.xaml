@@ -33,38 +33,52 @@ VBWR E -->
                 <TextBlock x:Name="VersionText" Text="Version" Opacity="0.65"
                            HorizontalAlignment="Center" />
             </StackPanel>
-            <TextBlock Text="Music steps back while you speak, then smoothly returns."
-                       TextWrapping="Wrap" TextAlignment="Center" />
+            <TextBlock Text="Focus on your voice. Let your audio step back." TextWrapping="Wrap" TextAlignment="Center" />
             <Border Background="#263B50" RequestedTheme="Dark" CornerRadius="10" Padding="14">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="This is VibeWare" FontWeight="SemiBold"
-                               Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-                    <TextBlock Text="I created VoiceDucker with AI assistance. I guide its development and remain responsible for checking the result. This app participates in the VibeWare initiative."
-                               TextWrapping="Wrap" FontSize="12"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <HyperlinkButton Content="Read the VibeWare manifesto"
-                                     NavigateUri="https://umbertogiacobbi.biz/vibeware/manifesto"
-                                     HorizontalAlignment="Left" Padding="0" FontSize="13" />
+                <StackPanel Spacing="9">
+                    <TextBlock Text="This is VibeWare" FontWeight="SemiBold" />
+                    <TextBlock Text="I created VoiceDucker with AI assistance. I define the purpose, guide the implementation, and take responsibility for checking functionality, performance, and security."
+                               TextWrapping="Wrap" FontSize="12" />
+                    <TextBlock Text="VibeWare is my initiative for building useful software openly with AI. To learn what VibeWare means and why I created it, read the manifesto."
+                               TextWrapping="Wrap" FontSize="12" />
+                    <HyperlinkButton NavigateUri="https://umbertogiacobbi.biz/vibeware/manifesto"
+                                     Padding="0" AutomationProperties.Name="Read the VibeWare manifesto">
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <FontIcon Glyph="&#xE8A5;" FontFamily="Segoe Fluent Icons" FontSize="14" />
+                            <TextBlock Text="Read the VibeWare manifesto" />
+                        </StackPanel>
+                    </HyperlinkButton>
                 </StackPanel>
             </Border>
-            <Grid ColumnSpacing="16" RowSpacing="4">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <HyperlinkButton Content="VoiceDucker on GitHub ↗"
-                                 NavigateUri="https://github.com/umbertotechnopreneur/VoiceDucker"
-                                 HorizontalAlignment="Left" Padding="0" FontSize="13" />
-                <HyperlinkButton Grid.Row="1" Content="VibeWare on GitHub ↗"
-                                 NavigateUri="https://github.com/umbertotechnopreneur/VibeWare"
-                                 HorizontalAlignment="Left" Padding="0" FontSize="13" />
-                <Button Grid.Column="1" Grid.RowSpan="2" Content="Close"
-                        HorizontalAlignment="Right" VerticalAlignment="Bottom" Click="Close_Click" />
-            </Grid>
+            <StackPanel Orientation="Horizontal" Spacing="14" HorizontalAlignment="Center">
+                <HyperlinkButton NavigateUri="https://github.com/umbertotechnopreneur/VoiceDucker" Padding="0" FontSize="11"
+                                 AutomationProperties.Name="VoiceDucker on GitHub">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <PathIcon Width="13" Height="13" Data="M6.766 11.328c-2.063-.25-3.516-1.734-3.516-3.656 0-.781.281-1.625.75-2.188-.203-.515-.172-1.609.063-2.062.625-.078 1.468.25 1.968.703.594-.187 1.219-.281 1.985-.281.765 0 1.39.094 1.953.265.484-.437 1.344-.765 1.969-.687.218.422.25 1.515.046 2.047.5.593.766 1.39.766 2.203 0 1.922-1.453 3.375-3.547 3.64.531.344.89 1.094.89 1.954v1.625c0 .468.391.734.86.547C13.781 14.359 16 11.53 16 8.03 16 3.61 12.406 0 7.984 0 3.563 0 0 3.61 0 8.031a7.88 7.88 0 0 0 5.172 7.422c.422.156.828-.125.828-.547v-1.25c-.219.094-.5.156-.75.156-1.031 0-1.64-.562-2.078-1.609-.172-.422-.36-.672-.719-.719-.187-.015-.25-.093-.25-.187 0-.188.313-.328.625-.328.453 0 .844.281 1.25.86.313.452.64.655 1.031.655s.641-.14 1-.5c.266-.265.47-.5.657-.656" />
+                        <TextBlock Text="VoiceDucker on GitHub" />
+                    </StackPanel>
+                </HyperlinkButton>
+                <HyperlinkButton NavigateUri="https://github.com/umbertotechnopreneur/VibeWare" Padding="0" FontSize="11"
+                                 AutomationProperties.Name="VibeWare on GitHub">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <PathIcon Width="13" Height="13" Data="M6.766 11.328c-2.063-.25-3.516-1.734-3.516-3.656 0-.781.281-1.625.75-2.188-.203-.515-.172-1.609.063-2.062.625-.078 1.468.25 1.968.703.594-.187 1.219-.281 1.985-.281.765 0 1.39.094 1.953.265.484-.437 1.344-.765 1.969-.687.218.422.25 1.515.046 2.047.5.593.766 1.39.766 2.203 0 1.922-1.453 3.375-3.547 3.64.531.344.89 1.094.89 1.954v1.625c0 .468.391.734.86.547C13.781 14.359 16 11.53 16 8.03 16 3.61 12.406 0 7.984 0 3.563 0 0 3.61 0 8.031a7.88 7.88 0 0 0 5.172 7.422c.422.156.828-.125.828-.547v-1.25c-.219.094-.5.156-.75.156-1.031 0-1.64-.562-2.078-1.609-.172-.422-.36-.672-.719-.719-.187-.015-.25-.093-.25-.187 0-.188.313-.328.625-.328.453 0 .844.281 1.25.86.313.452.64.655 1.031.655s.641-.14 1-.5c.266-.265.47-.5.657-.656" />
+                        <TextBlock Text="VibeWare on GitHub" />
+                    </StackPanel>
+                </HyperlinkButton>
+                <HyperlinkButton NavigateUri="https://umbertogiacobbi.biz" Padding="0" FontSize="11"
+                                 AutomationProperties.Name="umbertogiacobbi.biz">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <FontIcon Glyph="&#xE774;" FontFamily="Segoe Fluent Icons" FontSize="13" />
+                        <TextBlock Text="umbertogiacobbi.biz" />
+                    </StackPanel>
+                </HyperlinkButton>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+                <HyperlinkButton Content="Terms" NavigateUri="https://umbertogiacobbi.biz/terms/" Padding="0" FontSize="12" />
+                <TextBlock Text="·" VerticalAlignment="Center" />
+                <HyperlinkButton Content="Privacy" NavigateUri="https://umbertogiacobbi.biz/privacy/" Padding="0" FontSize="12" />
+            </StackPanel>
+            <Button Content="Close" HorizontalAlignment="Right" Click="Close_Click" />
         </StackPanel>
     </ScrollViewer>
 </Window>
