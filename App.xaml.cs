@@ -60,8 +60,12 @@ public partial class App : Application
         _window.Closed += (_, _) =>
         {
             _window = null;
-            _singleInstance?.Dispose();
-            _singleInstance = null;
+            try { _singleInstance?.Dispose(); }
+            finally
+            {
+                _singleInstance = null;
+                Exit();
+            }
         };
         var dispatcher = _window.DispatcherQueue;
         _singleInstance.Listen(() =>

@@ -120,15 +120,16 @@ public sealed partial class MainWindow : Window
         UpdateSettingsPaneWidth();
         try
         {
-            _playbackMonitor = new PlaybackMonitor();
+            _engine.CapturePlaybackSnapshot();
+            _playbackMonitor = new PlaybackMonitor(_engine.VolumeSnapshot, _engine.VolumeEvents);
             _streamTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
-            _streamTimer.Tick += (_, _) => RefreshStreamRows();
+            _streamTimer.Tick += OnStreamTimerTick;
             RefreshStreamRows();
             _streamTimer.Start();
         }
         catch (Exception exception)
         {
-            FeedbackText.Text = $"Audio streams could not be listed: {exception.Message}";
+            FeedbackText.Text = $"Playback initialization failed: {exception.Message}";
         }
         _windowPlacement.StartTracking();
         try
@@ -449,21 +450,36 @@ public sealed partial class MainWindow : Window
         Close();
     }
 
+    private void OnStreamTimerTick(object? sender, object args) => RefreshStreamRows();
+
     private void OnClosed(object sender, WindowEventArgs args)
     {
+        void Release(string resource, Action cleanup)
+        {
+            try { cleanup(); }
+            catch (Exception exception)
+            {
+                AudioDiagnostics.Write(() => $"shutdown-failed resource={resource} error={exception.Message}");
+            }
+        }
+
         _windowPlacement.SizeChanged -= UpdateSettingsPaneWidth;
-        _windowPlacement.Dispose();
-        _lifetime.Cancel();
+        Release("window-placement", _windowPlacement.Dispose);
+        Release("pending-ui-work", _lifetime.Cancel);
         _micLedPulse.Stop();
         _mixerPulse.Stop();
         _streamTimer?.Stop();
-        _playbackMonitor?.Dispose();
+        if (_streamTimer is not null) _streamTimer.Tick -= OnStreamTimerTick;
+        _streamTimer = null;
+        Release("volume-notifications", () => _playbackMonitor?.Dispose());
+        _playbackMonitor = null;
         _engine.StatusChanged -= OnStatusChanged;
         AppWindow.Closing -= OnWindowClosing;
-        _tray?.Dispose();
-        _aboutWindow?.Close();
-        _closeChoice?.Close();
-        _engine.Dispose();
-        _lifetime.Dispose();
+        Release("tray", () => _tray?.Dispose());
+        Release("about-window", () => _aboutWindow?.Close());
+        Release("close-choice", () => _closeChoice?.Close());
+        Release("audio-worker", _engine.Dispose);
+        Release("ui-lifetime", _lifetime.Dispose);
+        AudioDiagnostics.Write(() => "application-shutdown cleanup=finished");
     }
 }

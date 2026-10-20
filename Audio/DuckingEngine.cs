@@ -30,6 +30,11 @@ internal sealed class DuckingEngine : IDisposable
     private int _restoreMillisecondsOnStop;
     private EngineStatus? _lastStatus;
     private double _microphoneLevel;
+    private bool _snapshotReady;
+    private bool _disposed;
+
+    internal PlaybackVolumeSnapshot VolumeSnapshot { get; } = new();
+    internal PlaybackVolumeEvents VolumeEvents { get; } = new();
 
     public DuckingEngine(DuckingSettings settings)
     {
@@ -38,6 +43,15 @@ internal sealed class DuckingEngine : IDisposable
     }
 
     public event Action<EngineStatus>? StatusChanged;
+
+    public void CapturePlaybackSnapshot()
+    {
+        if (_snapshotReady) return;
+        using var playback = new PlaybackSessions(snapshot: VolumeSnapshot);
+        playback.CaptureSnapshot();
+        _snapshotReady = true;
+        AudioDiagnostics.Write(() => "startup-volume-snapshot capture=off");
+    }
 
     public bool IsRunning
     {
@@ -61,9 +75,14 @@ internal sealed class DuckingEngine : IDisposable
 
     public void Start()
     {
+        if (!_snapshotReady)
+        {
+            throw new InvalidOperationException("The startup playback volume snapshot is unavailable. Restart VoiceDucker.");
+        }
         Thread worker;
         lock (_stateLock)
         {
+            ObjectDisposedException.ThrowIf(_disposed, this);
             if (_worker?.IsAlive == true)
             {
                 return;
@@ -111,7 +130,24 @@ internal sealed class DuckingEngine : IDisposable
 
     public void Dispose()
     {
+        lock (_stateLock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+        }
         Stop(2000);
+        lock (_stateLock)
+        {
+            if (_worker?.IsAlive == true)
+            {
+                AudioDiagnostics.Write(() => "engine-dispose worker-timeout restoration=unconfirmed");
+                return;
+            }
+            _stop?.Dispose();
+            _stop = null;
+            _worker = null;
+        }
+        AudioDiagnostics.Write(() => "engine-disposed worker=stopped");
     }
 
     /// <summary>
@@ -158,7 +194,7 @@ internal sealed class DuckingEngine : IDisposable
                 Volatile.Write(ref _microphoneLevel, level);
                 gate.Observe(level);
             };
-            playback = new PlaybackSessions();
+            playback = new PlaybackSessions(snapshot: VolumeSnapshot, volumeEvents: VolumeEvents);
             capture.StartRecording();
 
             bool? previousSpeaking = null;
@@ -209,7 +245,11 @@ internal sealed class DuckingEngine : IDisposable
                 {
                     error = $"Audio volume could not be restored: {exception.Message}";
                 }
-                playback.Dispose();
+                try { playback.Dispose(); }
+                catch (Exception exception)
+                {
+                    error = $"Audio resources could not be released: {exception.Message}";
+                }
             }
 
             Volatile.Write(ref _microphoneLevel, 0);

@@ -22,6 +22,8 @@ $sourceRoot = [Security.SecurityElement]::Escape($projectRoot)
     <Compile Include="Program.cs" />
     <Compile Include="Mixer.cs" />
     <Compile Include="$sourceRoot\Audio\PlaybackSessions.cs" Link="PlaybackSessions.cs" />
+    <Compile Include="$sourceRoot\Audio\PlaybackVolumeSnapshot.cs" Link="PlaybackVolumeSnapshot.cs" />
+    <Compile Include="$sourceRoot\Audio\PlaybackVolumeEvents.cs" Link="PlaybackVolumeEvents.cs" />
     <Compile Include="$sourceRoot\Audio\AudioDiagnostics.cs" Link="AudioDiagnostics.cs" />
     <Compile Include="$sourceRoot\Audio\DuckingSettings.cs" Link="DuckingSettings.cs" />
     <Compile Include="$sourceRoot\Audio\PlaybackIdentity.cs" Link="PlaybackIdentity.cs" />
@@ -33,7 +35,18 @@ $sourceRoot = [Security.SecurityElement]::Escape($projectRoot)
 @'
 namespace NAudio.CoreAudioApi.Interfaces
 {
-    public enum AudioSessionState { AudioSessionStateActive }
+    public enum AudioSessionState { AudioSessionStateActive, AudioSessionStateInactive }
+    public enum AudioSessionDisconnectReason { DisconnectReasonDeviceRemoval }
+    public interface IAudioSessionEvents
+    {
+        int OnSimpleVolumeChanged(float volume, bool isMuted, ref Guid eventContext);
+        int OnDisplayNameChanged(string displayName, ref Guid eventContext);
+        int OnIconPathChanged(string iconPath, ref Guid eventContext);
+        int OnChannelVolumeChanged(uint channelCount, IntPtr newVolumes, uint channelIndex, ref Guid eventContext);
+        int OnGroupingParamChanged(ref Guid groupingId, ref Guid eventContext);
+        int OnStateChanged(AudioSessionState state);
+        int OnSessionDisconnected(AudioSessionDisconnectReason reason);
+    }
 }
 namespace NAudio.CoreAudioApi
 {
@@ -57,22 +70,60 @@ namespace NAudio.CoreAudioApi
     }
     public sealed class AudioSessionControl
     {
-        public string GetSessionInstanceIdentifier => "test-session";
+        public string GetSessionInstanceIdentifier { get; set; } = "test-session";
         public uint GetProcessID => (uint)Environment.ProcessId;
-        public Interfaces.AudioSessionState State => Interfaces.AudioSessionState.AudioSessionStateActive;
+        public Interfaces.AudioSessionState State { get; set; } = Interfaces.AudioSessionState.AudioSessionStateActive;
         public SimpleAudioVolume SimpleAudioVolume { get; } = new();
         public AudioMeterInformation AudioMeterInformation { get; } = new();
     }
     public sealed class SimpleAudioVolume
     {
         private float _volume = 1f;
+        public List<Interfaces.IAudioSessionEvents> Sinks { get; } = [];
         public bool Mute { get; set; }
-        public float Volume { get => _volume; set { _volume = value; Writes++; } }
+        public Guid LastWriteContext { get; private set; }
+        public float Volume { get => _volume; set => SetVolume(value, Guid.Empty); }
+        public void SetVolume(float value, Guid context)
+        {
+            _volume = value;
+            Writes++;
+            LastWriteContext = context;
+            foreach (var sink in Sinks.ToArray()) sink.OnSimpleVolumeChanged(value, Mute, ref context);
+        }
         public int Writes { get; private set; }
     }
     public sealed class AudioMeterInformation
     {
         public float MasterPeakValue { get; set; } = 0.5f;
+    }
+}
+namespace VoiceDucker.Audio
+{
+    internal sealed class NativePlaybackSession : IDisposable
+    {
+        private readonly NAudio.CoreAudioApi.SimpleAudioVolume _volume;
+        private readonly PlaybackVolumeEvents.VolumeEventSink? _sink;
+        private NativePlaybackSession(NAudio.CoreAudioApi.SimpleAudioVolume volume,
+            PlaybackVolumeEvents.VolumeEventSink? sink)
+        {
+            _volume = volume;
+            _sink = sink;
+            if (sink is not null) volume.Sinks.Add(sink);
+        }
+        public static NativePlaybackSession Open(string endpointId, string instanceId,
+            PlaybackVolumeEvents? events = null) => new(
+                NAudio.CoreAudioApi.MMDeviceEnumerator.Session.SimpleAudioVolume,
+                events?.CreateSink(endpointId + ":" + instanceId));
+        public void SetVolume(float volume, Guid context) => _volume.SetVolume(volume, context);
+        public void Dispose()
+        {
+            _sink?.Deactivate();
+            if (_sink is not null) _volume.Sinks.Remove(_sink);
+        }
+        public static void DisposeAll(IEnumerable<NativePlaybackSession> sessions)
+        {
+            foreach (var session in sessions) session.Dispose();
+        }
     }
 }
 '@ | Set-Content (Join-Path $testRoot 'Mixer.cs') -Encoding utf8
@@ -85,6 +136,51 @@ void Check(bool condition, string message)
 {
     if (!condition) throw new InvalidOperationException(message);
 }
+
+// The real callback must ignore our context, keep per-session external changes,
+// and stop accepting notifications after unregistration.
+var events = new PlaybackVolumeEvents();
+var sink = events.CreateSink("isolated-session");
+var ownContext = events.EventContext;
+sink.OnSimpleVolumeChanged(0.1f, false, ref ownContext);
+Check(events.Latest("isolated-session") is null, "Our own write was classified as external.");
+var externalContext = Guid.NewGuid();
+sink.OnSimpleVolumeChanged(0.42f, false, ref externalContext);
+Check(events.Latest("isolated-session") is { Volume: 0.42f, Muted: false }, "External volume change was lost.");
+sink.OnSimpleVolumeChanged(0.42f, true, ref externalContext);
+var mutedChange = events.Latest("isolated-session");
+Check(mutedChange is { Muted: true } && mutedChange.Version > 1, "External mute change was lost.");
+Check(events.Latest("another-session") is null, "An external change leaked across sessions.");
+sink.Deactivate();
+sink.OnSimpleVolumeChanged(0.8f, false, ref externalContext);
+Check(events.Latest("isolated-session") == mutedChange, "A disposed sink accepted a callback.");
+
+// A genuine external event smaller than the old polling tolerance still restarts
+// a fade. Own fade writes must never feed back into that external-event state.
+MMDeviceEnumerator.Session = new();
+long eventTick = 0;
+var fadeEvents = new PlaybackVolumeEvents();
+using (var observer = NativePlaybackSession.Open("test-endpoint", "test-session", fadeEvents))
+using (var playback = new PlaybackSessions(() => eventTick, volumeEvents: fadeEvents))
+{
+    var settings = new DuckingSettings(90, 1000, 0, true);
+    playback.Update(true, settings);
+    eventTick = 1000;
+    playback.Update(true, settings);
+    var volume = MMDeviceEnumerator.Session.SimpleAudioVolume;
+    Check(fadeEvents.Latest("test-endpoint:test-session") is null, "Own fade callback was external.");
+    volume.Volume = 0.101f;
+    eventTick = 1100;
+    playback.Update(true, settings);
+    Check(volume.Volume == 0.101f, "The external event below the polling tolerance was ignored.");
+    eventTick = 2100;
+    playback.Update(true, settings);
+    Check(Math.Abs(volume.Volume - 0.1f) < 0.00001f, "External callback prevented fade completion.");
+    playback.RestoreAll(0);
+    Check(volume.Volume == 1f && volume.LastWriteContext == fadeEvents.EventContext,
+        "Restoration did not preserve the startup snapshot and our EventContext.");
+}
+Console.WriteLine("PASS: own/external EventContext, volume/mute notifications, session isolation, disposal and sub-tolerance external fades.");
 
 // Exercise the actual gate and session loop together with the local listening
 // profile: room noise must release the gate and every new voice must lower again.
@@ -182,7 +278,61 @@ foreach (var manualDuringRestore in new[] { false, true })
     now += 50;
     playback.Update(!manualDuringRestore, settings);
     playback.RestoreAll(0);
-    Check(volume.Volume == 0.42f && !playback.HasOwnedSessions, "A manual mixer edit was overwritten.");
+    Check(volume.Volume == 1f && !playback.HasOwnedSessions,
+        "An external mixer edit replaced the app-lifetime snapshot.");
+}
+
+// Snapshot inactive and silent sessions at launch, before microphone Enable.
+// Worker replacement models Disable/Enable and microphone-device changes.
+foreach (var original in new[] { 1f, 0.65f, 0.12f })
+{
+    MMDeviceEnumerator.Session = new();
+    var session = MMDeviceEnumerator.Session;
+    var volume = session.SimpleAudioVolume;
+    volume.Volume = original;
+    session.State = NAudio.CoreAudioApi.Interfaces.AudioSessionState.AudioSessionStateInactive;
+    session.AudioMeterInformation.MasterPeakValue = 0;
+    var snapshot = new PlaybackVolumeSnapshot();
+    using (var startup = new PlaybackSessions(snapshot: snapshot)) startup.CaptureSnapshot();
+    volume.Volume = 0.42f;
+    session.State = NAudio.CoreAudioApi.Interfaces.AudioSessionState.AudioSessionStateActive;
+    session.AudioMeterInformation.MasterPeakValue = 0.5f;
+    var settings = new DuckingSettings(90, 0, 0, true);
+    for (var enable = 0; enable < 3; enable++)
+    {
+        using var playback = new PlaybackSessions(snapshot: snapshot);
+        playback.CaptureSnapshot(); // Re-observing must never overwrite a captured value.
+        playback.Update(true, settings);
+        Check(Math.Abs(volume.Volume - original * 0.1f) < 0.00001f,
+            "Ducking used a later mixer level instead of the startup snapshot.");
+        playback.RestoreAll(0);
+        Check(volume.Volume == original, "A worker restart discarded the startup snapshot.");
+        volume.Volume = 0.42f;
+    }
+    Console.WriteLine($"PASS: inactive startup snapshot={original:P0}, external edits, three worker restarts.");
+}
+
+// A session created later gets its own first-observed value, independently of
+// existing sessions, even when it disappears and is subsequently enumerated again.
+MMDeviceEnumerator.Session = new();
+using (var playback = new PlaybackSessions())
+{
+    var first = MMDeviceEnumerator.Session;
+    playback.CaptureSnapshot();
+    var second = new AudioSessionControl { GetSessionInstanceIdentifier = "late-session" };
+    second.SimpleAudioVolume.Volume = 0.65f;
+    MMDeviceEnumerator.Session = second;
+    playback.CaptureSnapshot();
+    second.SimpleAudioVolume.Volume = 0.3f;
+    var settings = new DuckingSettings(90, 0, 0, true);
+    playback.Update(true, settings);
+    playback.RestoreAll(0);
+    Check(second.SimpleAudioVolume.Volume == 0.65f, "A new session lost its first-observed volume.");
+    MMDeviceEnumerator.Session = first;
+    first.SimpleAudioVolume.Volume = 0.4f;
+    playback.Update(true, settings);
+    playback.RestoreAll(0);
+    Check(first.SimpleAudioVolume.Volume == 1f, "Session disappearance discarded the startup snapshot.");
 }
 
 foreach (var muted in new[] { false, true })
@@ -203,7 +353,7 @@ using (var playback = new PlaybackSessions())
     playback.RestoreAll(0);
     Check(MMDeviceEnumerator.Session.SimpleAudioVolume.Volume == 1f, "Disable did not restore immediately.");
 }
-Console.WriteLine("PASS: manual edits, muted/silent sessions and immediate Disable restoration.");
+Console.WriteLine("PASS: immutable snapshots, new sessions, external edits, muted/silent sessions and immediate Disable restoration.");
 '@ | Set-Content (Join-Path $testRoot 'Program.cs') -Encoding utf8
 
 & dotnet run --project (Join-Path $testRoot 'RestorationTests.csproj') -c Debug `

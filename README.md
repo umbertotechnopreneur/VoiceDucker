@@ -42,6 +42,8 @@ Open **Settings**. Start with the defaults.
 Leave the other settings alone until you need them.
 
 Settings save automatically. The window remembers its size and position too.
+MSIX updates keep these preferences. Uninstalling the MSIX removes its private
+settings, so install a newer package over the existing one to keep them.
 
 ## Good to know
 
@@ -52,6 +54,14 @@ For OBS or Clipchamp, make a short test recording first. VoiceDucker lowers
 Windows playback; your recording's sound depends on its audio sources.
 
 Opening VoiceDucker again shows the existing window, not a second copy.
+
+At launch, VoiceDucker remembers each app audio session's volume in memory.
+Every reduction and restoration uses that same baseline until VoiceDucker exits,
+including after Disable/Enable or a mixer change. Sessions created later are
+remembered when first detected. Muted and silent playback is left alone.
+Windows volume and mute notifications are monitored even while the microphone
+is off. VoiceDucker recognizes its own mixer writes separately from external
+changes; external changes do not replace the startup baseline.
 
 <img src="docs/screenshots/main-window.png" alt="VoiceDucker with the microphone off" width="480">
 

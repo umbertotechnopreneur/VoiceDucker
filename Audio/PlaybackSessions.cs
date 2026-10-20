@@ -18,8 +18,7 @@ using NAudio.CoreAudioApi.Interfaces;
 namespace VoiceDucker.Audio;
 
 /// <summary>
-/// Tracks only session levels changed by VoiceDucker, across active playback devices.
-/// A user mixer edit ends ownership; restoring audio must never undo that edit.
+/// Fades playing sessions against their immutable app-lifetime volume snapshot.
 /// </summary>
 internal sealed class PlaybackSessions : IDisposable
 {
@@ -27,16 +26,38 @@ internal sealed class PlaybackSessions : IDisposable
     private const float VolumeTolerance = 0.005f;
     private readonly MMDeviceEnumerator _devices = new();
     private readonly Dictionary<string, SavedVolume> _saved = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _manualOverrides = new(StringComparer.Ordinal);
+    private readonly PlaybackVolumeSnapshot _snapshot;
+    private readonly PlaybackVolumeEvents _volumeEvents;
+    private readonly Dictionary<string, NativePlaybackSession> _volumeSessions = new(StringComparer.Ordinal);
     private readonly Dictionary<int, bool> _spotifyProcesses = new();
     private readonly Func<long> _clock;
 
-    public PlaybackSessions(Func<long>? clock = null)
+    public PlaybackSessions(Func<long>? clock = null, PlaybackVolumeSnapshot? snapshot = null,
+        PlaybackVolumeEvents? volumeEvents = null)
     {
         _clock = clock ?? (() => Environment.TickCount64);
+        _snapshot = snapshot ?? new PlaybackVolumeSnapshot();
+        _volumeEvents = volumeEvents ?? new PlaybackVolumeEvents();
     }
 
     public bool HasOwnedSessions => _saved.Count > 0;
+
+    public void CaptureSnapshot()
+    {
+        foreach (var endpoint in _devices.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
+        {
+            using (endpoint)
+            {
+                var sessions = endpoint.AudioSessionManager.Sessions;
+                for (var index = 0; index < sessions.Count; index++)
+                {
+                    var session = sessions[index];
+                    _snapshot.GetOrCapture(endpoint.ID + ":" + session.GetSessionInstanceIdentifier,
+                        session.SimpleAudioVolume.Volume);
+                }
+            }
+        }
+    }
 
     /// <summary>
     /// Advances fades and returns the number of lowered sessions still owned by the app.
@@ -59,25 +80,30 @@ internal sealed class PlaybackSessions : IDisposable
                     var key = endpoint.ID + ":" + session.GetSessionInstanceIdentifier;
                     seen.Add(key);
                     var volume = session.SimpleAudioVolume;
+                    var original = _snapshot.GetOrCapture(key, volume.Volume);
                     var processName = PlaybackIdentity.ProcessName((int)session.GetProcessID);
                     var eligible = !settings.IsProcessExcluded(processName) &&
                                    (settings.IncludeOtherSources || IsSpotify(session));
 
                     if (_saved.TryGetValue(key, out var saved))
                     {
-                        if (!IsAt(volume.Volume, saved.Expected))
+                        if (volume.Mute)
                         {
-                            AudioDiagnostics.Write(() => $"ownership-lost process={processName} session={key} original={saved.Original:R} expected={saved.Expected:R} actual={volume.Volume:R} ducking={shouldDuck}");
-                            // A mixer change by the user ends our claim on this session.
                             _saved.Remove(key);
-                            if (shouldDuck)
-                            {
-                                _manualOverrides.Add(key);
-                            }
+                            continue;
                         }
-                        else if (restoreImmediately)
+                        var external = _volumeEvents.Latest(key);
+                        if (external is not null && external.Version > saved.ExternalVersion)
                         {
-                            volume.Volume = saved.Original;
+                            saved.ExternalVersion = external.Version;
+                            // Resume from the current mixer level without replacing the snapshot.
+                            saved.StartVolume = volume.Volume;
+                            saved.Expected = saved.StartVolume;
+                            saved.StartTick = now;
+                        }
+                        if (restoreImmediately)
+                        {
+                            SetVolume(endpoint.ID, key, session, saved.Original);
                             AudioDiagnostics.Write(() => $"restore-immediate process={processName} session={key} target={saved.Original:R} actual={volume.Volume:R}");
                             _saved.Remove(key);
                         }
@@ -107,11 +133,11 @@ internal sealed class PlaybackSessions : IDisposable
                                 : Math.Clamp((float)(now - saved.StartTick) / duration, 0f, 1f);
                             var next = fraction >= 1f ? saved.Target
                                 : saved.StartVolume + (saved.Target - saved.StartVolume) * fraction;
-                            // The tolerance detects mixer edits; it must not leave a fade
-                            // short of its target and save that lower level on the next cycle.
+                            // Always finish exactly at the immutable target, even when the
+                            // final step is smaller than the mixer-change tolerance.
                             if (fraction >= 1f ? volume.Volume != next : !IsAt(volume.Volume, next))
                             {
-                                volume.Volume = next;
+                                SetVolume(endpoint.ID, key, session, next);
                                 saved.Expected = next;
                             }
 
@@ -128,7 +154,7 @@ internal sealed class PlaybackSessions : IDisposable
                         continue;
                     }
 
-                    if (!shouldDuck || !eligible || _manualOverrides.Contains(key) || volume.Mute ||
+                    if (!shouldDuck || !eligible || volume.Mute ||
                         settings.ReductionPercent == 0 ||
                         session.State != AudioSessionState.AudioSessionStateActive ||
                         session.AudioMeterInformation.MasterPeakValue <= AudiblePeak)
@@ -136,18 +162,20 @@ internal sealed class PlaybackSessions : IDisposable
                         continue;
                     }
 
-                    var original = volume.Volume;
-                    if (original <= VolumeTolerance)
+                    if (original <= VolumeTolerance || volume.Volume <= VolumeTolerance)
                     {
                         continue;
                     }
 
                     var duckTarget = original * (1f - settings.ReductionPercent / 100f);
-                    var newVolume = new SavedVolume(original, duckTarget, now,
-                        settings.FadeDownMilliseconds);
+                    var newVolume = new SavedVolume(original, volume.Volume, duckTarget, now,
+                        settings.FadeDownMilliseconds)
+                    {
+                        ExternalVersion = _volumeEvents.Latest(key)?.Version ?? 0
+                    };
                     if (settings.FadeDownMilliseconds == 0)
                     {
-                        volume.Volume = duckTarget;
+                        SetVolume(endpoint.ID, key, session, duckTarget);
                         newVolume.Expected = duckTarget;
                     }
                     _saved.Add(key, newVolume);
@@ -163,10 +191,10 @@ internal sealed class PlaybackSessions : IDisposable
             AudioDiagnostics.Write(() => $"session-disappeared session={key} original={_saved[key].Original:R} expected={_saved[key].Expected:R}");
             _saved.Remove(key);
         }
-        _manualOverrides.RemoveWhere(key => !seen.Contains(key));
-        if (!shouldDuck)
+        foreach (var key in _volumeSessions.Keys.Where(key => !seen.Contains(key)).ToArray())
         {
-            _manualOverrides.Clear();
+            _volumeSessions[key].Dispose();
+            _volumeSessions.Remove(key);
         }
 
         return owned;
@@ -195,7 +223,25 @@ internal sealed class PlaybackSessions : IDisposable
         }
     }
 
-    public void Dispose() => _devices.Dispose();
+    public void Dispose()
+    {
+        try { NativePlaybackSession.DisposeAll(_volumeSessions.Values); }
+        finally
+        {
+            _volumeSessions.Clear();
+            _devices.Dispose();
+        }
+    }
+
+    private void SetVolume(string endpointId, string key, AudioSessionControl session, float volume)
+    {
+        if (!_volumeSessions.TryGetValue(key, out var native))
+        {
+            native = NativePlaybackSession.Open(endpointId, session.GetSessionInstanceIdentifier);
+            _volumeSessions.Add(key, native);
+        }
+        native.SetVolume(volume, _volumeEvents.EventContext);
+    }
 
     private static bool IsAt(float actual, float expected) =>
         Math.Abs(actual - expected) < VolumeTolerance;
@@ -219,15 +265,15 @@ internal sealed class PlaybackSessions : IDisposable
         return spotify;
     }
 
-    // Expected is the last value written by this app, not simply the current fade target.
-    // Comparing it with the Windows mixer detects external edits before another write.
-    private sealed class SavedVolume(float original, float target, long startTick, int duration)
+    // External changes can restart a fade, but Original always comes from the startup snapshot.
+    private sealed class SavedVolume(float original, float current, float target, long startTick, int duration)
     {
         public float Original { get; } = original;
-        public float Expected { get; set; } = original;
-        public float StartVolume { get; set; } = original;
+        public float Expected { get; set; } = current;
+        public float StartVolume { get; set; } = current;
         public float Target { get; set; } = target;
         public long StartTick { get; set; } = startTick;
         public int Duration { get; set; } = duration;
+        public long ExternalVersion { get; set; }
     }
 }

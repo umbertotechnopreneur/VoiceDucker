@@ -21,13 +21,16 @@ namespace VoiceDucker.Audio;
 internal sealed record PlaybackStream(string Key, string Name, int ProcessId, float Volume,
     float Peak, bool Muted, bool IsSpotify);
 
-internal sealed class PlaybackMonitor : IDisposable
+internal sealed class PlaybackMonitor(PlaybackVolumeSnapshot snapshot, PlaybackVolumeEvents volumeEvents) : IDisposable
 {
     private readonly MMDeviceEnumerator _devices = new();
+    private readonly Dictionary<string, NativePlaybackSession> _subscriptions = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, long> _reportedVersions = new(StringComparer.Ordinal);
 
     public IReadOnlyList<PlaybackStream> Read()
     {
         var streams = new List<PlaybackStream>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var endpoint in _devices.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
         {
             using (endpoint)
@@ -38,6 +41,21 @@ internal sealed class PlaybackMonitor : IDisposable
                     try
                     {
                         var session = sessions[index];
+                        var key = endpoint.ID + ":" + session.GetSessionInstanceIdentifier;
+                        seen.Add(key);
+                        snapshot.GetOrCapture(key, session.SimpleAudioVolume.Volume);
+                        if (!_subscriptions.ContainsKey(key))
+                        {
+                            _subscriptions.Add(key, NativePlaybackSession.Open(endpoint.ID,
+                                session.GetSessionInstanceIdentifier, volumeEvents));
+                            AudioDiagnostics.Write(() => $"volume-events-subscribed session={key}");
+                        }
+                        var change = volumeEvents.Latest(key);
+                        if (change is not null && change.Version > _reportedVersions.GetValueOrDefault(key))
+                        {
+                            _reportedVersions[key] = change.Version;
+                            AudioDiagnostics.Write(() => $"external-volume-change session={key} volume={change.Volume:R} muted={change.Muted}");
+                        }
                         if (session.State != AudioSessionState.AudioSessionStateActive)
                         {
                             continue;
@@ -62,12 +80,19 @@ internal sealed class PlaybackMonitor : IDisposable
                             session.AudioMeterInformation.MasterPeakValue, audio.Mute,
                             name.StartsWith("Spotify", StringComparison.OrdinalIgnoreCase)));
                     }
-                    catch (Exception)
+                    catch (Exception exception)
                     {
-                        // A session can disappear between enumeration and reading it.
+                        throw new InvalidOperationException("Playback session notifications could not be refreshed.", exception);
                     }
                 }
             }
+        }
+
+        foreach (var key in _subscriptions.Keys.Where(key => !seen.Contains(key)).ToArray())
+        {
+            _subscriptions[key].Dispose();
+            _subscriptions.Remove(key);
+            _reportedVersions.Remove(key);
         }
 
         return streams;
@@ -90,7 +115,13 @@ internal sealed class PlaybackMonitor : IDisposable
                             continue;
                         }
 
-                        session.SimpleAudioVolume.Volume = Math.Clamp(volume, 0, 1);
+                        if (!_subscriptions.TryGetValue(key, out var native))
+                        {
+                            native = NativePlaybackSession.Open(endpoint.ID, session.GetSessionInstanceIdentifier,
+                                volumeEvents);
+                            _subscriptions.Add(key, native);
+                        }
+                        native.SetVolume(volume, volumeEvents.EventContext);
                         return true;
                     }
                     catch (Exception)
@@ -103,5 +134,18 @@ internal sealed class PlaybackMonitor : IDisposable
         return false;
     }
 
-    public void Dispose() => _devices.Dispose();
+    public void Dispose()
+    {
+        try
+        {
+            NativePlaybackSession.DisposeAll(_subscriptions.Values);
+            AudioDiagnostics.Write(() => $"volume-events-unsubscribed count={_subscriptions.Count}");
+        }
+        finally
+        {
+            _subscriptions.Clear();
+            _reportedVersions.Clear();
+            _devices.Dispose();
+        }
+    }
 }
