@@ -8,6 +8,22 @@ It can lower browser videos and other Windows apps too.
 Useful for AI chats, Zoom or Teams calls, and demos or streams with
 OBS Studio, Microsoft Clipchamp, or similar tools.
 
+> [!IMPORTANT]
+> **Windows on ARM testers wanted — volunteer guinea pigs welcome! 🐹**
+>
+> This is my hobby project, and I don't have a Windows ARM machine, a Mac,
+> or a Linux setup available for hands-on testing. If you can try the
+> Windows ARM64 build, I'd love your help checking microphone detection,
+> audio ducking, and volume restoration. I'll give you all the support I can.
+>
+> **VoiceDucker currently runs on Windows only.** macOS and Linux would need
+> ports before testing is possible. If you'd like to help with that work and
+> eventually be a guinea pig there too, you're very welcome!
+>
+> [Open an issue](https://github.com/umbertotechnopreneur/VoiceDucker/issues)
+> and tell me which platform you have. Building a package doesn't prove it
+> works on real hardware — that's where you come in.
+
 ## What changed in 0.2.0
 
 Since 0.1.1, I improved the audio engine and reviewed its resource handling:
