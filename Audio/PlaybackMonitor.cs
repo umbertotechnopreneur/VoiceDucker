@@ -41,6 +41,7 @@ internal sealed class PlaybackMonitor(PlaybackVolumeSnapshot snapshot, PlaybackV
                     try
                     {
                         var session = sessions[index];
+                        if (session.State == AudioSessionState.AudioSessionStateExpired) continue;
                         var key = endpoint.ID + ":" + session.GetSessionInstanceIdentifier;
                         seen.Add(key);
                         snapshot.GetOrCapture(key, session.SimpleAudioVolume.Volume);

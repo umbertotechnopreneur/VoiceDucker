@@ -137,8 +137,9 @@ the current mixer level while retaining the immutable startup baseline.
 
 NAudio 2.2.1's convenience callback omits EventContext and its volume setter uses
 an empty context, so a small native bridge owns the underlying session interfaces.
-The monitor logs external changes on its UI tick and releases disappeared-session
-subscriptions. Closing the app stops and detaches the timer, deactivates and
+The monitor logs external changes on its UI tick and releases subscriptions for
+disappeared or expired sessions. The audio worker also releases expired-session
+handles rather than keeping them until Disable. Closing stops and detaches the timer, deactivates and
 unregisters every callback, releases COM references and stops the audio worker.
 Cleanup continues across individual disposal failures and logs them. The app
 explicitly exits its message loop after closing, including when worker shutdown

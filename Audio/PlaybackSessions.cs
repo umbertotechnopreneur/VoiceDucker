@@ -77,6 +77,7 @@ internal sealed class PlaybackSessions : IDisposable
                 for (var index = 0; index < sessions.Count; index++)
                 {
                     var session = sessions[index];
+                    if (session.State == AudioSessionState.AudioSessionStateExpired) continue;
                     var key = endpoint.ID + ":" + session.GetSessionInstanceIdentifier;
                     seen.Add(key);
                     var volume = session.SimpleAudioVolume;

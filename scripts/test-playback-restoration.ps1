@@ -35,7 +35,7 @@ $sourceRoot = [Security.SecurityElement]::Escape($projectRoot)
 @'
 namespace NAudio.CoreAudioApi.Interfaces
 {
-    public enum AudioSessionState { AudioSessionStateActive, AudioSessionStateInactive }
+    public enum AudioSessionState { AudioSessionStateActive, AudioSessionStateInactive, AudioSessionStateExpired }
     public enum AudioSessionDisconnectReason { DisconnectReasonDeviceRemoval }
     public interface IAudioSessionEvents
     {
@@ -101,6 +101,8 @@ namespace VoiceDucker.Audio
 {
     internal sealed class NativePlaybackSession : IDisposable
     {
+        public static int ActiveCount { get; private set; }
+        private bool _disposed;
         private readonly NAudio.CoreAudioApi.SimpleAudioVolume _volume;
         private readonly PlaybackVolumeEvents.VolumeEventSink? _sink;
         private NativePlaybackSession(NAudio.CoreAudioApi.SimpleAudioVolume volume,
@@ -108,6 +110,7 @@ namespace VoiceDucker.Audio
         {
             _volume = volume;
             _sink = sink;
+            ActiveCount++;
             if (sink is not null) volume.Sinks.Add(sink);
         }
         public static NativePlaybackSession Open(string endpointId, string instanceId,
@@ -117,6 +120,9 @@ namespace VoiceDucker.Audio
         public void SetVolume(float volume, Guid context) => _volume.SetVolume(volume, context);
         public void Dispose()
         {
+            if (_disposed) return;
+            _disposed = true;
+            ActiveCount--;
             _sink?.Deactivate();
             if (_sink is not null) _volume.Sinks.Remove(_sink);
         }
@@ -181,6 +187,18 @@ using (var playback = new PlaybackSessions(() => eventTick, volumeEvents: fadeEv
         "Restoration did not preserve the startup snapshot and our EventContext.");
 }
 Console.WriteLine("PASS: own/external EventContext, volume/mute notifications, session isolation, disposal and sub-tolerance external fades.");
+
+MMDeviceEnumerator.Session = new();
+using (var playback = new PlaybackSessions())
+{
+    playback.Update(true, new DuckingSettings(90, 0, 0, true));
+    Check(NativePlaybackSession.ActiveCount == 1, "The test did not acquire a native session handle.");
+    MMDeviceEnumerator.Session.State = NAudio.CoreAudioApi.Interfaces.AudioSessionState.AudioSessionStateExpired;
+    playback.Update(false, new DuckingSettings());
+    Check(!playback.HasOwnedSessions && NativePlaybackSession.ActiveCount == 0,
+        "An expired session retained a native handle or an unfinished fade.");
+}
+Console.WriteLine("PASS: expired sessions release native handles without waiting for application exit.");
 
 // Exercise the actual gate and session loop together with the local listening
 // profile: room noise must release the gate and every new voice must lower again.
