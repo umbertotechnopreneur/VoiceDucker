@@ -8,6 +8,19 @@ It can lower browser videos and other Windows apps too.
 Useful for AI chats, Zoom or Teams calls, and demos or streams with
 OBS Studio, Microsoft Clipchamp, or similar tools.
 
+## A small personal note
+
+No sales pitch here: now that I use VoiceDucker every day, I appreciate it more
+than I expected. Chrome and Edge tabs apparently have a lot to say, and some
+prefer to shout. I hadn't realised how much those interruptions broke my
+concentration, especially with headphones on.
+
+Having music, a video or a film turn down while I speak makes everyday PC use
+feel much calmer. I still get the audio I want, with less of a fight for my
+attention. It's a small convenience until you get used to it — then you miss it.
+I'm glad I shared the app. If it makes other people's days a little less noisy
+too, that's a good enough reason for me.
+
 > [!IMPORTANT]
 > **Windows on ARM testers wanted — volunteer guinea pigs welcome! 🐹**
 >
