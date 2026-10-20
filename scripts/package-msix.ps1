@@ -18,6 +18,8 @@
 param(
     [ValidateSet('x64', 'ARM64')]
     [string]$Architecture = 'x64',
+    [ValidateSet('Debug', 'Release')]
+    [string]$Configuration = 'Release',
     [string]$CertificateThumbprint,
     [switch]$Unsigned,
     [switch]$Install
@@ -28,7 +30,7 @@ $ErrorActionPreference = 'Stop'
 
 if ($Install -and $Unsigned) { throw 'An unsigned package cannot be installed by this script.' }
 if (-not $Unsigned -and [string]::IsNullOrWhiteSpace($CertificateThumbprint)) {
-    throw 'A signing certificate thumbprint is required for a Release MSIX.'
+    throw 'A signing certificate thumbprint is required for a signed MSIX.'
 }
 
 $root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -39,7 +41,7 @@ $version = [version]$identity.Version
 $publisher = [string]$identity.Publisher
 $runtime = 'win-' + $Architecture.ToLowerInvariant()
 $packageDirectory = [System.IO.Path]::GetFullPath(
-    (Join-Path $root "artifacts\msix\release\$version\$($Architecture.ToLowerInvariant())"))
+    (Join-Path $root "artifacts\msix\$($Configuration.ToLowerInvariant())\$version\$($Architecture.ToLowerInvariant())"))
 $repositoryPrefix = $root.TrimEnd('\') + '\'
 if (-not $packageDirectory.StartsWith($repositoryPrefix, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Package output is outside the repository: $packageDirectory"
@@ -70,7 +72,7 @@ New-Item -ItemType Directory -Path $packageDirectory -Force | Out-Null
 
 $arguments = @(
     'msbuild', $project, '/restore', '/t:Clean,Build',
-    '/p:Configuration=Release', "/p:Platform=$Architecture",
+    "/p:Configuration=$Configuration", "/p:Platform=$Architecture",
     "/p:RuntimeIdentifier=$runtime", '/p:SelfContained=true',
     '/p:WindowsPackageType=MSIX', '/p:GenerateAppxPackageOnBuild=true',
     '/p:UapAppxPackageBuildMode=SideloadOnly', '/p:AppxBundle=Never',
@@ -86,7 +88,7 @@ else {
         "/p:PackageCertificateThumbprint=$($certificate.Thumbprint)")
 }
 & dotnet @arguments
-if ($LASTEXITCODE -ne 0) { throw 'Release MSIX build failed.' }
+if ($LASTEXITCODE -ne 0) { throw "$Configuration MSIX build failed." }
 
 $packages = @(Get-ChildItem -LiteralPath $packageDirectory -Filter '*.msix' -Recurse -File |
     Where-Object { $_.DirectoryName -notmatch '[\\/]Dependencies([\\/]|$)' })
@@ -115,7 +117,7 @@ try {
 }
 finally { $archive.Dispose() }
 
-Write-Host "Release MSIX ready: $($package.FullName)"
+Write-Host "$Configuration MSIX ready: $($package.FullName)"
 if ($Install) {
     $signature = Get-AuthenticodeSignature -LiteralPath $package.FullName
     if ($signature.Status -ne 'Valid') {
@@ -129,5 +131,5 @@ if ($Install) {
     if ($installed.Count -ne 1) {
         throw 'MSIX deployment finished without the expected version, architecture, and Ok status.'
     }
-    Write-Host "Installed VoiceDucker Release MSIX $version ($Architecture)."
+    Write-Host "Installed VoiceDucker $Configuration MSIX $version ($Architecture)."
 }

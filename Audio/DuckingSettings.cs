@@ -18,14 +18,14 @@ namespace VoiceDucker.Audio;
 internal sealed record DuckingSettings(
     int ReductionPercent = 90,
     int FadeDownMilliseconds = 300,
-    int FadeUpMilliseconds = 30000,
+    int FadeUpMilliseconds = 2000,
     bool IncludeOtherSources = false)
 {
     public static readonly double DefaultThresholdDecibels = 20 * Math.Log10(0.018);
 
     public double ThresholdDecibels { get; init; } = DefaultThresholdDecibels;
 
-    public int HysteresisDecibels { get; init; } = 6;
+    public int HysteresisDecibels { get; init; } = 3;
 
     public double GetThresholdAmplitude() => Math.Pow(10, ThresholdDecibels / 20);
 

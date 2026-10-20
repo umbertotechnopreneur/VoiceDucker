@@ -30,13 +30,28 @@ internal sealed class DuckingEngine : IDisposable
     private int _restoreMillisecondsOnStop;
     private EngineStatus? _lastStatus;
     private double _microphoneLevel;
+    private bool _snapshotReady;
+    private bool _disposed;
+
+    internal PlaybackVolumeSnapshot VolumeSnapshot { get; } = new();
+    internal PlaybackVolumeEvents VolumeEvents { get; } = new();
 
     public DuckingEngine(DuckingSettings settings)
     {
         _settings = settings.IsValid ? settings : throw new ArgumentOutOfRangeException(nameof(settings));
+        AudioDiagnostics.Write(() => "engine-ready capture=off");
     }
 
     public event Action<EngineStatus>? StatusChanged;
+
+    public void CapturePlaybackSnapshot()
+    {
+        if (_snapshotReady) return;
+        using var playback = new PlaybackSessions(snapshot: VolumeSnapshot);
+        playback.CaptureSnapshot();
+        _snapshotReady = true;
+        AudioDiagnostics.Write(() => "startup-volume-snapshot capture=off");
+    }
 
     public bool IsRunning
     {
@@ -60,9 +75,14 @@ internal sealed class DuckingEngine : IDisposable
 
     public void Start()
     {
+        if (!_snapshotReady)
+        {
+            throw new InvalidOperationException("The startup playback volume snapshot is unavailable. Restart VoiceDucker.");
+        }
         Thread worker;
         lock (_stateLock)
         {
+            ObjectDisposedException.ThrowIf(_disposed, this);
             if (_worker?.IsAlive == true)
             {
                 return;
@@ -110,7 +130,24 @@ internal sealed class DuckingEngine : IDisposable
 
     public void Dispose()
     {
+        lock (_stateLock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+        }
         Stop(2000);
+        lock (_stateLock)
+        {
+            if (_worker?.IsAlive == true)
+            {
+                AudioDiagnostics.Write(() => "engine-dispose worker-timeout restoration=unconfirmed");
+                return;
+            }
+            _stop?.Dispose();
+            _stop = null;
+            _worker = null;
+        }
+        AudioDiagnostics.Write(() => "engine-disposed worker=stopped");
     }
 
     /// <summary>
@@ -119,6 +156,8 @@ internal sealed class DuckingEngine : IDisposable
     /// </summary>
     private void Run(ManualResetEventSlim stop)
     {
+        var initialSettings = Volatile.Read(ref _settings);
+        AudioDiagnostics.Write(() => $"engine-start reduction={initialSettings.ReductionPercent} fadeDown={initialSettings.FadeDownMilliseconds} fadeUp={initialSettings.FadeUpMilliseconds}");
         PlaybackSessions? playback = null;
         string? error = null;
         string? microphoneName = null;
@@ -155,15 +194,21 @@ internal sealed class DuckingEngine : IDisposable
                 Volatile.Write(ref _microphoneLevel, level);
                 gate.Observe(level);
             };
-            playback = new PlaybackSessions();
+            playback = new PlaybackSessions(snapshot: VolumeSnapshot, volumeEvents: VolumeEvents);
             capture.StartRecording();
 
+            bool? previousSpeaking = null;
             while (!stop.Wait(50))
             {
                 var settings = Volatile.Read(ref _settings);
                 gate.Configure(settings);
                 var speaking = gate.IsSpeaking;
                 var lowered = playback.Update(speaking, settings);
+                if (previousSpeaking != speaking)
+                {
+                    AudioDiagnostics.Write(() => $"gate-change speaking={speaking} rms={Volatile.Read(ref _microphoneLevel):R} thresholdDb={settings.ThresholdDecibels:R} hysteresisDb={settings.HysteresisDecibels} affected={lowered}");
+                    previousSpeaking = speaking;
+                }
                 var message = speaking && lowered > 0
                     ? $"Microphone sound detected. Reducing {lowered} playing session(s) by up to {settings.ReductionPercent}%."
                     : speaking
@@ -200,10 +245,15 @@ internal sealed class DuckingEngine : IDisposable
                 {
                     error = $"Audio volume could not be restored: {exception.Message}";
                 }
-                playback.Dispose();
+                try { playback.Dispose(); }
+                catch (Exception exception)
+                {
+                    error = $"Audio resources could not be released: {exception.Message}";
+                }
             }
 
             Volatile.Write(ref _microphoneLevel, 0);
+            AudioDiagnostics.Write(() => $"engine-stop result={error ?? "restoration-complete"}");
             Publish(false, false, 0, 0, error ?? "Off. Your microphone is not in use.");
         }
     }

@@ -13,9 +13,15 @@ network calls or startup registration without a request.
 - Use WinUI 3 and the Windows App SDK; do not replace the UI with Windows Forms.
 - The audio engine owns microphone capture and active playback Core Audio sessions.
   Never adjust system master volume or muted or silent sessions.
-- Preserve user mixer changes. Restore only a level the app still owns and
-  report failures instead of claiming audio was restored.
+- Capture playback-session volume baselines when the app opens and keep them
+  unchanged until it exits, including across Disable/Enable and external mixer
+  changes. Capture new sessions when first observed. Restore changed sessions
+  to those baselines and report failures instead of claiming audio was restored.
 - Keep microphone capture opt-in, in memory only, and inactive at launch.
+- Tag all mixer writes with the app's EventContext and receive external session
+  volume/mute changes through Core Audio callbacks, including while disabled.
+  Unregister callbacks, stop UI timers and release audio resources on exit.
+  Callback handling must not block or create a separate background process.
 - Preserve the approved VibeWare logo's pixels and transparency. Follow its
   lo-fi 1980s computing style without neon effects.
 
