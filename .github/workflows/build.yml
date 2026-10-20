@@ -56,7 +56,7 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
-      - name: Check settings, window placement and single-instance behavior
+      - name: Check settings, window placement, single-instance behavior and audio restoration
         if: matrix.architecture == 'x64'
         timeout-minutes: 5
         shell: pwsh
@@ -64,6 +64,7 @@ jobs:
           ./scripts/test-settings-persistence.ps1
           ./scripts/test-window-placement.ps1
           ./scripts/test-single-instance.ps1
+          ./scripts/test-playback-restoration.ps1
       - name: Clean and build portable app
         shell: pwsh
         run: ./scripts/build.ps1 -Architecture '${{ matrix.architecture }}' -Configuration Release

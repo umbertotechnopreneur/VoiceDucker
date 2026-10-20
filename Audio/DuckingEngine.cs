@@ -34,6 +34,7 @@ internal sealed class DuckingEngine : IDisposable
     public DuckingEngine(DuckingSettings settings)
     {
         _settings = settings.IsValid ? settings : throw new ArgumentOutOfRangeException(nameof(settings));
+        AudioDiagnostics.Write(() => "engine-ready capture=off");
     }
 
     public event Action<EngineStatus>? StatusChanged;
@@ -119,6 +120,8 @@ internal sealed class DuckingEngine : IDisposable
     /// </summary>
     private void Run(ManualResetEventSlim stop)
     {
+        var initialSettings = Volatile.Read(ref _settings);
+        AudioDiagnostics.Write(() => $"engine-start reduction={initialSettings.ReductionPercent} fadeDown={initialSettings.FadeDownMilliseconds} fadeUp={initialSettings.FadeUpMilliseconds}");
         PlaybackSessions? playback = null;
         string? error = null;
         string? microphoneName = null;
@@ -158,12 +161,18 @@ internal sealed class DuckingEngine : IDisposable
             playback = new PlaybackSessions();
             capture.StartRecording();
 
+            bool? previousSpeaking = null;
             while (!stop.Wait(50))
             {
                 var settings = Volatile.Read(ref _settings);
                 gate.Configure(settings);
                 var speaking = gate.IsSpeaking;
                 var lowered = playback.Update(speaking, settings);
+                if (previousSpeaking != speaking)
+                {
+                    AudioDiagnostics.Write(() => $"gate-change speaking={speaking} rms={Volatile.Read(ref _microphoneLevel):R} thresholdDb={settings.ThresholdDecibels:R} hysteresisDb={settings.HysteresisDecibels} affected={lowered}");
+                    previousSpeaking = speaking;
+                }
                 var message = speaking && lowered > 0
                     ? $"Microphone sound detected. Reducing {lowered} playing session(s) by up to {settings.ReductionPercent}%."
                     : speaking
@@ -204,6 +213,7 @@ internal sealed class DuckingEngine : IDisposable
             }
 
             Volatile.Write(ref _microphoneLevel, 0);
+            AudioDiagnostics.Write(() => $"engine-stop result={error ?? "restoration-complete"}");
             Publish(false, false, 0, 0, error ?? "Off. Your microphone is not in use.");
         }
     }

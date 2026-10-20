@@ -21,7 +21,7 @@ internal sealed class VoiceGate
 {
     private readonly object _sync = new();
     private double _threshold = 0.018;
-    private int _hysteresisDecibels = 6;
+    private int _hysteresisDecibels = 3;
     private readonly Func<long> _clock;
     private int _holdMilliseconds = 650;
     private long _lastLoudTick = -1;

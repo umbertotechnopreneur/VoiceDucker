@@ -29,6 +29,12 @@ internal sealed class PlaybackSessions : IDisposable
     private readonly Dictionary<string, SavedVolume> _saved = new(StringComparer.Ordinal);
     private readonly HashSet<string> _manualOverrides = new(StringComparer.Ordinal);
     private readonly Dictionary<int, bool> _spotifyProcesses = new();
+    private readonly Func<long> _clock;
+
+    public PlaybackSessions(Func<long>? clock = null)
+    {
+        _clock = clock ?? (() => Environment.TickCount64);
+    }
 
     public bool HasOwnedSessions => _saved.Count > 0;
 
@@ -40,7 +46,7 @@ internal sealed class PlaybackSessions : IDisposable
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var owned = 0;
-        var now = Environment.TickCount64;
+        var now = _clock();
 
         foreach (var endpoint in _devices.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
         {
@@ -61,6 +67,7 @@ internal sealed class PlaybackSessions : IDisposable
                     {
                         if (!IsAt(volume.Volume, saved.Expected))
                         {
+                            AudioDiagnostics.Write(() => $"ownership-lost process={processName} session={key} original={saved.Original:R} expected={saved.Expected:R} actual={volume.Volume:R} ducking={shouldDuck}");
                             // A mixer change by the user ends our claim on this session.
                             _saved.Remove(key);
                             if (shouldDuck)
@@ -71,6 +78,7 @@ internal sealed class PlaybackSessions : IDisposable
                         else if (restoreImmediately)
                         {
                             volume.Volume = saved.Original;
+                            AudioDiagnostics.Write(() => $"restore-immediate process={processName} session={key} target={saved.Original:R} actual={volume.Volume:R}");
                             _saved.Remove(key);
                         }
                         else
@@ -87,6 +95,7 @@ internal sealed class PlaybackSessions : IDisposable
 
                             if (!IsAt(target, saved.Target) || duration != saved.Duration)
                             {
+                                AudioDiagnostics.Write(() => $"fade-start process={processName} session={key} original={saved.Original:R} actual={volume.Volume:R} target={target:R} duration={duration}");
                                 saved.StartVolume = volume.Volume;
                                 saved.Target = target;
                                 saved.StartTick = now;
@@ -96,15 +105,19 @@ internal sealed class PlaybackSessions : IDisposable
                             var fraction = duration == 0
                                 ? 1f
                                 : Math.Clamp((float)(now - saved.StartTick) / duration, 0f, 1f);
-                            var next = saved.StartVolume + (saved.Target - saved.StartVolume) * fraction;
-                            if (!IsAt(volume.Volume, next))
+                            var next = fraction >= 1f ? saved.Target
+                                : saved.StartVolume + (saved.Target - saved.StartVolume) * fraction;
+                            // The tolerance detects mixer edits; it must not leave a fade
+                            // short of its target and save that lower level on the next cycle.
+                            if (fraction >= 1f ? volume.Volume != next : !IsAt(volume.Volume, next))
                             {
                                 volume.Volume = next;
+                                saved.Expected = next;
                             }
-                            saved.Expected = next;
 
                             if ((!shouldDuck || !eligible) && fraction >= 1f)
                             {
+                                AudioDiagnostics.Write(() => $"restore-complete process={processName} session={key} target={saved.Original:R} actual={volume.Volume:R}");
                                 _saved.Remove(key);
                             }
                             else
@@ -138,6 +151,7 @@ internal sealed class PlaybackSessions : IDisposable
                         newVolume.Expected = duckTarget;
                     }
                     _saved.Add(key, newVolume);
+                    AudioDiagnostics.Write(() => $"acquire process={processName} session={key} original={original:R} target={duckTarget:R}");
                     owned++;
                 }
             }
@@ -146,6 +160,7 @@ internal sealed class PlaybackSessions : IDisposable
         // A session that disappeared cannot be restored through the mixer.
         foreach (var key in _saved.Keys.Where(key => !seen.Contains(key)).ToArray())
         {
+            AudioDiagnostics.Write(() => $"session-disappeared session={key} original={_saved[key].Original:R} expected={_saved[key].Expected:R}");
             _saved.Remove(key);
         }
         _manualOverrides.RemoveWhere(key => !seen.Contains(key));

@@ -101,7 +101,7 @@ VBWR E -->
                                        Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged"
                                        AutomationProperties.Name="Detection hysteresis in decibels" />
                         </Grid>
-                        <TextBlock Text="Keeps detection active through small dips below the threshold. Default: 6 dB; set 0 to disable."
+                        <TextBlock Text="Keeps detection active through small dips below the threshold. Default: 3 dB; set 0 to disable."
                                    TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
                         <TextBlock x:Name="ReleaseThresholdText" TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
                     </StackPanel>
