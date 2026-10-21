@@ -33,8 +33,12 @@ network calls or startup registration without a request.
 - Keep generated outputs and logs out of Git. Pin package versions.
 - Do not add migration paths or compatibility branches solely for older app versions.
   Keep current user choices and runtime safety checks; they are not legacy support.
-- Build after code edits and state separately whether an interactive microphone
-  and playback test was actually performed.
+- Build after code edits. The owner performs tests; do not run automated or
+  interactive tests unless explicitly requested for the current task.
+- Announce any planned app launch, close, termination or restart before doing it,
+  including during installation. Do not open or close the app, toggle microphone
+  monitoring or change playback volumes for validation. These actions can disturb
+  the owner's live audio session; leave functional verification to the owner.
 - For owner-authorized documentation-only or repository-instruction-only delivery,
   commit and push directly on the current branch with `[skip ci]`. Do not create
   a branch or pull request or start CI. Preserve unrelated changes.
@@ -48,12 +52,13 @@ network calls or startup registration without a request.
 - Keep main-window footer links visible for 30 seconds, then fade them out over
   3 seconds without shifting layout. Restore them on footer hover or keyboard
   focus and keep them visible during interaction. About links remain available.
-- When the owner requests an installer, build the updated MSIX, terminate any
-  running VoiceDucker instance, install the new package, and verify the installed
-  version and deployment status. The owner has authorized forced termination for
-  this workflow; no additional confirmation is needed. Preserve saved settings
-  and restart the installed app with microphone capture off. An explicit request
-  to compile only or skip installation takes precedence.
+- When the owner requests an installer, build the updated MSIX and announce the
+  planned app stop/restart before executing it. Forced termination is authorized
+  for this deployment workflow without another confirmation. Install the package
+  and verify its version and deployment status without UI tests. Preserve saved
+  settings and restart the app with microphone capture off as announced. Do not
+  perform additional validation restarts. An explicit request to compile only or
+  skip installation takes precedence.
 
 ## Shared publication interface
 
