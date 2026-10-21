@@ -17,7 +17,9 @@ network calls or startup registration without a request.
   unchanged until it exits, including across Disable/Enable and external mixer
   changes. Capture new sessions when first observed. Restore changed sessions
   to those baselines and report failures instead of claiming audio was restored.
-- Keep microphone capture opt-in, in memory only, and inactive at launch.
+- Keep microphone capture opt-in and in memory only. Manual launches keep capture
+  off. Windows startup may enable it only through the separate saved microphone
+  opt-in, after the playback snapshot and normal license checks.
 - Tag all mixer writes with the app's EventContext and receive external session
   volume/mute changes through Core Audio callbacks, including while disabled.
   Unregister callbacks, stop UI timers and release audio resources on exit.

@@ -43,7 +43,10 @@ Keep changes small. Playback baselines are captured at launch and kept in
 new sessions even while the microphone is off. Disable/Enable and microphone
 changes must reuse the same snapshot. External mixer edits never replace it:
 the next reduction/restoration still targets the captured level. Microphone
-capture must stay off at startup. Do not add old-version migration paths.
+capture must stay off on manual launches. Windows startup may enable capture only
+with the separate saved microphone opt-in, after the playback snapshot and normal
+license checks. Packaged launches use `StartupTask` activation; portable Run entries
+pass `--windows-startup`. Do not add old-version migration paths.
 
 ## Run the checks
 

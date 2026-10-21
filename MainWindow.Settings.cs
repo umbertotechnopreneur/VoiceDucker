@@ -263,6 +263,7 @@ public sealed partial class MainWindow
     private async void StartupCheckBox_Click(object sender, RoutedEventArgs args)
     {
         StartupCheckBox.IsEnabled = false;
+        StartupMicrophoneCheckBox.IsEnabled = false;
         try
         {
             await StartupRegistration.SetEnabledAsync(StartupCheckBox.IsChecked == true);
@@ -284,6 +285,36 @@ public sealed partial class MainWindow
         finally
         {
             StartupCheckBox.IsEnabled = true;
+            StartupMicrophoneCheckBox.IsEnabled = StartupCheckBox.IsChecked == true;
+        }
+    }
+
+    private async void StartupMicrophoneCheckBox_Click(object sender, RoutedEventArgs args)
+    {
+        if (!_settingsReady) return;
+
+        StartupCheckBox.IsEnabled = false;
+        StartupMicrophoneCheckBox.IsEnabled = false;
+        try
+        {
+            // Refresh the registered startup command for the current executable.
+            if (StartupCheckBox.IsChecked == true)
+                await StartupRegistration.SetEnabledAsync(true);
+            _settings = _settings with
+            {
+                EnableMicrophoneOnWindowsStartup = StartupMicrophoneCheckBox.IsChecked == true
+            };
+            ApplyAndSaveSettings();
+        }
+        catch (Exception exception)
+        {
+            StartupMicrophoneCheckBox.IsChecked = _settings.EnableMicrophoneOnWindowsStartup;
+            FeedbackText.Text = $"Microphone startup preference could not be changed: {exception.Message}";
+        }
+        finally
+        {
+            StartupCheckBox.IsEnabled = true;
+            StartupMicrophoneCheckBox.IsEnabled = StartupCheckBox.IsChecked == true;
         }
     }
 }

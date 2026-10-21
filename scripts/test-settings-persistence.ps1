@@ -47,7 +47,8 @@ var expected = new DuckingSettings(73, 450, 12300, true)
     {
         BlacklistedProcesses = ["Spotify", "FluentFlyout"], MicrophoneGainDecibels = 27,
         MicrophoneDeviceId = "isolated-test-microphone", RestoreDelayMilliseconds = 1750,
-        ThresholdDecibels = -47.3, HysteresisDecibels = 9
+        ThresholdDecibels = -47.3, HysteresisDecibels = 9,
+        LastSettingsSection = "volume", EnableMicrophoneOnWindowsStartup = true
     };
 if (args is ["write-and-kill", _])
 {
@@ -163,6 +164,38 @@ Check(!SettingsStore.Load(path, out error).IsProcessExcluded("Spotify"),
 Check(!File.Exists(path + ".tmp"), "A successful save left its temporary file behind.");
 
 var defaults = new DuckingSettings();
+Check(!defaults.EnableMicrophoneOnWindowsStartup && defaults.LastSettingsSection == "" &&
+    !defaults.ShouldEnableMicrophoneOnLaunch(false) && !defaults.ShouldEnableMicrophoneOnLaunch(true),
+    "Default startup preferences opened microphone capture.");
+Check(expected.ShouldEnableMicrophoneOnLaunch(true) && !expected.ShouldEnableMicrophoneOnLaunch(false),
+    "Microphone startup opt-in was not restricted to Windows startup.");
+foreach (var section in new[] { "", "microphone", "volume", "apps" })
+{
+    foreach (var enableMicrophone in new[] { false, true })
+    {
+        var preference = defaults with
+        {
+            LastSettingsSection = section, EnableMicrophoneOnWindowsStartup = enableMicrophone
+        };
+        SettingsStore.Save(preference, path);
+        var restored = SettingsStore.Load(path, out error);
+        Check(error is null && SameSettings(restored, preference),
+            "The selected settings section or microphone startup preference did not survive a reload.");
+        Check(!restored.ShouldEnableMicrophoneOnLaunch(false) &&
+            restored.ShouldEnableMicrophoneOnLaunch(true) == enableMicrophone,
+            "A saved startup choice enabled the microphone for the wrong launch type.");
+    }
+}
+foreach (var invalidSection in new[] { "unknown", null })
+{
+    Check(!(defaults with { LastSettingsSection = invalidSection! }).IsValid,
+        "An invalid settings section was accepted.");
+}
+File.WriteAllText(path, "{}");
+var missingPreferences = SettingsStore.Load(path, out error);
+Check(error is null && !missingPreferences.EnableMicrophoneOnWindowsStartup &&
+    missingPreferences.LastSettingsSection == "",
+    "Absent preferences did not keep the microphone opt-in off.");
 SettingsStore.Save(defaults, path);
 Check(SameSettings(SettingsStore.Load(path, out error), defaults) && error is null,
     "Current defaults did not survive saving and reloading.");

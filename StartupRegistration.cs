@@ -15,6 +15,8 @@
 
 using Microsoft.Win32;
 using Windows.ApplicationModel;
+using Windows.ApplicationModel.Activation;
+using VoiceDucker.Audio;
 
 namespace VoiceDucker;
 
@@ -27,6 +29,7 @@ internal static class StartupRegistration
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "VibeWare.VoiceDucker";
     private const string StartupTaskId = "VoiceDuckerStartup";
+    private const string StartupArgument = "--windows-startup";
     private static readonly string PreferencePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "VibeWare", "VoiceDucker", "startup-preference-set");
@@ -80,7 +83,22 @@ internal static class StartupRegistration
 
         using var key = Registry.CurrentUser.OpenSubKey(RunKey);
         var command = key?.GetValue(ValueName) as string;
-        return string.Equals(command, GetCommand(), StringComparison.OrdinalIgnoreCase);
+        return command?.StartsWith(GetExecutableCommand(), StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    public static bool IsWindowsStartupLaunch()
+    {
+        try
+        {
+            return IsPackaged()
+                ? AppInstance.GetActivatedEventArgs()?.Kind == ActivationKind.StartupTask
+                : Environment.GetCommandLineArgs().Skip(1).Contains(StartupArgument, StringComparer.Ordinal);
+        }
+        catch (Exception exception)
+        {
+            AudioDiagnostics.Write(() => $"startup-activation-unavailable error={exception.Message}");
+            return false;
+        }
     }
 
     public static async Task SetEnabledAsync(bool enabled)
@@ -134,7 +152,9 @@ internal static class StartupRegistration
         }
     }
 
-    private static string GetCommand()
+    private static string GetCommand() => $"{GetExecutableCommand()} {StartupArgument}";
+
+    private static string GetExecutableCommand()
     {
         var path = Environment.ProcessPath ??
                    throw new InvalidOperationException("The executable path is unavailable.");

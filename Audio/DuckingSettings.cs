@@ -37,6 +37,13 @@ internal sealed record DuckingSettings(
 
     public string[] BlacklistedProcesses { get; init; } = [];
 
+    public string LastSettingsSection { get; init; } = string.Empty;
+
+    public bool EnableMicrophoneOnWindowsStartup { get; init; }
+
+    public bool ShouldEnableMicrophoneOnLaunch(bool isWindowsStartup) =>
+        isWindowsStartup && EnableMicrophoneOnWindowsStartup;
+
     public bool IsProcessExcluded(string name) => PlaybackIdentity.IsOwnProcess(name) ||
         BlacklistedProcesses.Any(hidden => PlaybackIdentity.NormalizeProcessName(hidden).Equals(
             PlaybackIdentity.NormalizeProcessName(name), StringComparison.OrdinalIgnoreCase));
@@ -48,6 +55,7 @@ internal sealed record DuckingSettings(
                            RestoreDelayMilliseconds is >= 0 and <= 10000 &&
                            FadeDownMilliseconds is >= 0 and <= 5000 &&
                            FadeUpMilliseconds is >= 0 and <= 30000 &&
+                           LastSettingsSection is "" or "microphone" or "volume" or "apps" &&
                            BlacklistedProcesses is not null &&
                            BlacklistedProcesses.All(name => !string.IsNullOrWhiteSpace(name));
 }
