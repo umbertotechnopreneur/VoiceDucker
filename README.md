@@ -113,12 +113,26 @@ changes; external changes do not replace the startup baseline.
 
 [Build and debug](docs/DEVELOPMENT.md) · [Package and release](docs/RELEASING.md)
 
+The Microsoft Store edition uses the Store-managed 30-day trial and a one-time
+purchase at the price shown for your market (base US price: $1.99). The trial
+does not automatically charge you. Store license status and expiration govern
+access; the app stops monitoring and restores audio it still owns if access ends.
+Local development packages and the MIT portable distribution do not use Store
+licensing. This does not change the source license.
+
+## A note on security
+
+I care about what goes into this project. Before I add a third-party library or prebuilt binary, including files supplied without source code, I scan the downloaded package, its extracted files and any dependencies with Microsoft Windows Defender. I keep new imports aside until the scan finishes without detections.
+
+I keep a record of where each new import came from and the scan result. If a scan cannot finish or flags something, I leave it out.
+
 ---
 
 <p align="right">
   <a href="https://umbertogiacobbi.biz/vibeware/manifesto">
     <img src="https://raw.githubusercontent.com/umbertotechnopreneur/VibeWare/main/Branding/vibeware-logo.png" alt="VibeWare floppy logo" width="160">
-  </a>
+  </a><br>
+  <em>Human Intent, AI Execution, Plenty of Token</em>
 </p>
 
 ### This is VibeWare · [Manifesto](https://umbertogiacobbi.biz/vibeware/manifesto)
@@ -132,16 +146,3 @@ To learn what VibeWare means and why I created it, read the [VibeWare manifesto]
 [Terms](https://umbertogiacobbi.biz/terms/) · [Privacy](https://umbertogiacobbi.biz/privacy/)
 
 *You are welcome to explore, adapt and reuse the open-source VibeWare materials under the project license — my contribution to the developer community.*
-
-The Microsoft Store edition uses the Store-managed 30-day trial and a one-time
-purchase at the price shown for your market (base US price: $1.99). The trial
-does not automatically charge you. Store license status and expiration govern
-access; the app stops monitoring and restores audio it still owns if access ends.
-Local development packages and the MIT portable distribution do not use Store
-licensing. This does not change the source license.
-
-## A note on security
-
-I care about what goes into this project. Before I add a third-party library or prebuilt binary, including files supplied without source code, I scan the downloaded package, its extracted files and any dependencies with Microsoft Windows Defender. I keep new imports aside until the scan finishes without detections.
-
-I keep a record of where each new import came from and the scan result. If a scan cannot finish or flags something, I leave it out.
