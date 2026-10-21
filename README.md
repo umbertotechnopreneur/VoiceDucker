@@ -60,7 +60,8 @@ See the [release notes](docs/releases/0.2.0.md) for details.
 3. Play some music. Press **Enable**.
 4. Speak. The music gets quieter. Pause, and it slowly comes back.
 
-Press **Disable** to stop. The microphone always starts **off**.
+Press **Disable** to stop. The microphone starts **off** unless you explicitly
+enable automatic monitoring for Windows startup.
 The ZIP needs no installer; it is unsigned, so Windows may show a security prompt.
 
 ## Choose which apps get quieter
@@ -85,9 +86,16 @@ Open **Settings**. Start with the defaults.
 
 Leave the other settings alone until you need them.
 
-Settings save automatically. The window remembers its size and position too.
+Settings save automatically. The app reopens the last selected Settings section
+and remembers the window size and position too.
 MSIX updates keep these preferences. Uninstalling the MSIX removes its private
 settings, so install a newer package over the existing one to keep them.
+
+Under **Apps & startup**, **Start with Windows** controls automatic launch.
+The separate **Enable microphone** checkbox also starts monitoring at Windows
+login. It is off by default and available when Windows startup is enabled.
+Changing it does not start the microphone immediately. Opening VoiceDucker
+manually keeps the microphone off.
 
 ## Good to know
 

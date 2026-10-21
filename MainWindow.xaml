@@ -188,8 +188,14 @@ VBWR E -->
                             </Button.Flyout>
                         </Button>
                     </StackPanel>
-                    <CheckBox x:Name="StartupCheckBox" Content="Start with Windows (opens with mic off)"
-                              Click="StartupCheckBox_Click" />
+                    <StackPanel Spacing="8">
+                        <CheckBox x:Name="StartupCheckBox" Content="Start with Windows"
+                                  Click="StartupCheckBox_Click" />
+                        <CheckBox x:Name="StartupMicrophoneCheckBox" Content="Enable microphone"
+                                  IsEnabled="False" Click="StartupMicrophoneCheckBox_Click" />
+                        <TextBlock Text="Automatically enable microphone monitoring when VoiceDucker starts with Windows. Off by default; opening the app manually keeps the microphone off."
+                                   TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
+                    </StackPanel>
                 </StackPanel>
             </Expander>
                     </StackPanel>

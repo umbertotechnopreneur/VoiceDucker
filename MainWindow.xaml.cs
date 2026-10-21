@@ -36,6 +36,7 @@ public sealed partial class MainWindow : Window
     private AboutWindow? _aboutWindow;
     private CloseChoiceWindow? _closeChoice;
     private bool _settingsReady;
+    private readonly bool _isWindowsStartup;
     private Expander? _openSettingsExpander;
     private bool _allowClose;
     private bool _micLedActive;
@@ -60,8 +61,9 @@ public sealed partial class MainWindow : Window
     private readonly DispatcherTimer _licenseTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private bool _trialExpiryShown;
 
-    public MainWindow()
+    public MainWindow(bool isWindowsStartup = false)
     {
+        _isWindowsStartup = isWindowsStartup;
         InitializeComponent();
         var footerFade = new DoubleAnimation
         {
@@ -89,12 +91,14 @@ public sealed partial class MainWindow : Window
         FadeUpBox.Value = _settings.FadeUpMilliseconds;
         RestoreDelayBox.Value = _settings.RestoreDelayMilliseconds;
         OtherSourcesCheckBox.IsChecked = _settings.IncludeOtherSources;
+        StartupMicrophoneCheckBox.IsChecked = _settings.EnableMicrophoneOnWindowsStartup;
         SensitivitySlider.Value = _settings.MicrophoneGainDecibels;
         UpdateSensitivityLabel();
         ThresholdSlider.Value = _settings.ThresholdDecibels;
         HysteresisBox.Value = _settings.HysteresisDecibels;
         UpdateThresholdDisplay();
         RefreshHiddenApps();
+        RestoreSettingsSection();
         _settingsReady = true;
         FeedbackText.Text = settingsError ?? string.Empty;
         RefreshMicrophoneChoices();
@@ -145,6 +149,7 @@ public sealed partial class MainWindow : Window
             await UpdateLicenseUiAsync();
             _ = _licensing.RefreshAsync();
         }
+        var playbackReady = false;
         try
         {
             _engine.CapturePlaybackSnapshot();
@@ -153,6 +158,7 @@ public sealed partial class MainWindow : Window
             _streamTimer.Tick += OnStreamTimerTick;
             RefreshStreamRows();
             _streamTimer.Start();
+            playbackReady = true;
         }
         catch (Exception exception)
         {
@@ -185,6 +191,13 @@ public sealed partial class MainWindow : Window
         finally
         {
             StartupCheckBox.IsEnabled = true;
+            StartupMicrophoneCheckBox.IsEnabled = StartupCheckBox.IsChecked == true;
+        }
+
+        if (playbackReady && _settings.ShouldEnableMicrophoneOnLaunch(_isWindowsStartup) &&
+            !_engine.IsRunning && !_lifetime.IsCancellationRequested)
+        {
+            await ToggleDuckingAsync();
         }
     }
 
@@ -195,6 +208,27 @@ public sealed partial class MainWindow : Window
             if (_openSettingsExpander is not null) _openSettingsExpander.IsExpanded = false;
             _openSettingsExpander = sender;
         }
+        if (_settingsReady)
+        {
+            _settings = _settings with
+            {
+                LastSettingsSection = sender == DetectionExpander ? "microphone"
+                    : sender == VolumeExpander ? "volume" : "apps"
+            };
+            ApplyAndSaveSettings();
+        }
+    }
+
+    private void RestoreSettingsSection()
+    {
+        var section = _settings.LastSettingsSection switch
+        {
+            "microphone" => DetectionExpander,
+            "volume" => VolumeExpander,
+            "apps" => AppsExpander,
+            _ => null
+        };
+        if (section is not null) section.IsExpanded = true;
     }
 
     private async Task RemindWhenMonitoringIsOffAsync()
