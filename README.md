@@ -1,5 +1,9 @@
 # VoiceDucker
 
+[![Windows build status](https://github.com/umbertotechnopreneur/VoiceDucker/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/umbertotechnopreneur/VoiceDucker/actions/workflows/build.yml)
+![Platform: Windows 11](https://img.shields.io/badge/platform-Windows_11-0078D4)
+[![License: MIT](https://img.shields.io/badge/license-MIT-2EA44F)](LICENSE)
+
 **You talk. Music turns down. You stop. It comes back.**
 
 I built VoiceDucker to talk to AI while Spotify keeps playing.
