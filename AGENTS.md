@@ -33,8 +33,11 @@ network calls or startup registration without a request.
   Keep current user choices and runtime safety checks; they are not legacy support.
 - Build after code edits and state separately whether an interactive microphone
   and playback test was actually performed.
-- Work on topic branches and propose pull requests for `main`. The repository
-  owner controls merges and any direct bypass allowed by GitHub protection.
+- For owner-authorized documentation-only or repository-instruction-only delivery,
+  commit and push directly on the current branch with `[skip ci]`. Do not create
+  a branch or pull request or start CI. Preserve unrelated changes.
+- For other changes, work on topic branches and propose pull requests for `main`.
+  The repository owner controls merges and any direct bypass allowed by GitHub protection.
 - Keep public documentation in English; discuss work with the owner in Italian.
 - Follow VibeWare's shared `templates/APP-PUBLICATION.md` guidance for the main
   footer, About disclosure, repository/site/manifesto links and centered Terms
