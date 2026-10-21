@@ -24,18 +24,16 @@ too, that's a good enough reason for me.
 > [!IMPORTANT]
 > **Windows on ARM testers wanted — volunteer guinea pigs welcome! 🐹**
 >
-> This is my hobby project, and I don't have a Windows ARM machine, a Mac,
-> or a Linux setup available for hands-on testing. If you can try the
+> This is my hobby project. If you can try the
 > Windows ARM64 build, I'd love your help checking microphone detection,
 > audio ducking, and volume restoration. I'll give you all the support I can.
 >
 > **VoiceDucker currently runs on Windows only.** macOS and Linux would need
-> ports before testing is possible. If you'd like to help with that work and
+> ports. If you'd like to help with that work and
 > eventually be a guinea pig there too, you're very welcome!
 >
 > [Open an issue](https://github.com/umbertotechnopreneur/VoiceDucker/issues)
-> and tell me which platform you have. Building a package doesn't prove it
-> works on real hardware — that's where you come in.
+> and tell me which platform you have and what worked or failed.
 
 ## What changed in 0.2.0
 
@@ -52,7 +50,7 @@ Since 0.1.1, I improved the audio engine and reviewed its resource handling:
 - I corrected the WinGet packaging instructions and reviewed dependency scan
   evidence, microphone privacy, diagnostics and memory/resource lifetime.
 
-See the [release notes](docs/releases/0.2.0.md) for checks and their limits.
+See the [release notes](docs/releases/0.2.0.md) for details.
 
 ## Start here
 
@@ -142,12 +140,8 @@ access; the app stops monitoring and restores audio it still owns if access ends
 Local development packages and the MIT portable distribution do not use Store
 licensing. This does not change the source license.
 
-## External binary security policy
+## A note on security
 
-On first import of a new third-party binary or version, scan its official archive
-and staged extracted files with Microsoft Defender before use. Record its source,
-SHA-256, command and completed result; unavailable, failed or detecting scans block
-import. Reuse that evidence for unchanged imports. Builds and tests do not start
-scans, and generated application output is not an external import. Never bypass
-a detection with exclusions or disabled protection. This policy does not certify
-previously unverified dependencies.
+I care about what goes into this project. Before I add a third-party library or prebuilt binary, including files supplied without source code, I scan the downloaded package, its extracted files and any dependencies with Microsoft Windows Defender. I keep new imports aside until the scan finishes without detections.
+
+I keep a record of where each new import came from and the scan result. If a scan cannot finish or flags something, I leave it out.
