@@ -338,14 +338,17 @@ VBWR E -->
                 </StackPanel>
             </Button>
 
-            <StackPanel Spacing="8">
-                <TextBlock Text="ACTIVE AUDIO STREAMS" FontFamily="Consolas" FontWeight="SemiBold" />
-                <TextBlock Text="Spotify is lowered by default. Sliders control each app's Windows audio session."
-                           TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
-                <StackPanel x:Name="StreamRows" Spacing="8" />
-                <TextBlock x:Name="NoStreamsText" Text="No apps playing audio right now."
-                           FontSize="12" Opacity="0.68" />
-            </StackPanel>
+            <Expander x:Name="AudioStreamsExpander" Header="Active audio streams"
+                      IsExpanded="True" MinHeight="40" Padding="12" HorizontalAlignment="Stretch"
+                      HorizontalContentAlignment="Stretch">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Spotify is lowered by default. Sliders control each app's Windows audio session."
+                               TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
+                    <StackPanel x:Name="StreamRows" Spacing="8" />
+                    <TextBlock x:Name="NoStreamsText" Text="No apps playing audio right now."
+                               FontSize="12" Opacity="0.68" />
+                </StackPanel>
+            </Expander>
 
             <TextBlock x:Name="FeedbackText" TextWrapping="Wrap" FontSize="12" />
 
