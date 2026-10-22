@@ -22,7 +22,7 @@ VoiceDucker controls Windows playback volume, not the recording software's inter
 
 Choose how much the volume drops, how smoothly it fades, and how long it waits through little pauses. The green microphone meter helps you adjust sensitivity.
 
-Your microphone starts off. Audio stays on your device, in memory: no recordings, transcription, or uploads.
+Your microphone starts off by default. Enable microphone on startup opts into monitoring whenever VoiceDucker opens, including manual launches. Audio stays on your device, in memory: no recordings, transcription, or uploads.
 
 A native Windows 11 app built with WinUI 3, with ongoing attention to RAM, performance, and disk space.
 
@@ -40,7 +40,7 @@ Spotify by default; include other playing apps when you want.
 Choose your microphone and see its live level.
 Adjust sensitivity, volume reduction, and smooth fades.
 Keep audio quiet through little pauses.
-Microphone off at startup. Audio stays on your device.
+Microphone off by default, with a separate startup opt-in. Audio stays on your device.
 Native Windows 11 app, built with WinUI 3.
 
 KEYWORDS (one per keyword, seven total)
@@ -66,7 +66,7 @@ WHAT'S NEW IN THIS VERSION
 Leave blank for this first Store submission.
 
 SCREENSHOT CAPTIONS
-1. Ready when you are. The microphone starts off; press Enable to make room for your voice.
+1. Ready when you are. The microphone starts off by default; press Enable or choose Enable microphone on startup to make room for your voice.
 2. Your microphone, your timing, your amount of quiet. Fine-tune sensitivity and fades in Advanced options.
 3. Meet VoiceDucker and VibeWare: useful software I created with AI assistance, under my direction and responsibility.
 4. You talk. Spotify steps back. The green microphone meter shows the sound that triggers the volume drop.

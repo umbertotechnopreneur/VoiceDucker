@@ -41,8 +41,7 @@ internal sealed record DuckingSettings(
 
     public bool EnableMicrophoneOnWindowsStartup { get; init; }
 
-    public bool ShouldEnableMicrophoneOnLaunch(bool isWindowsStartup) =>
-        isWindowsStartup && EnableMicrophoneOnWindowsStartup;
+    public bool ShouldEnableMicrophoneOnLaunch() => EnableMicrophoneOnWindowsStartup;
 
     public bool IsProcessExcluded(string name) => PlaybackIdentity.IsOwnProcess(name) ||
         BlacklistedProcesses.Any(hidden => PlaybackIdentity.NormalizeProcessName(hidden).Equals(

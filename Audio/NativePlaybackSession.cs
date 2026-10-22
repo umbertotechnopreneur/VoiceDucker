@@ -75,7 +75,16 @@ internal sealed class NativePlaybackSession : IDisposable
     public void SetVolume(float volume, Guid eventContext)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        Marshal.ThrowExceptionForHR(_volume.SetMasterVolume(Math.Clamp(volume, 0, 1), eventContext));
+        var target = Math.Clamp(volume, 0, 1);
+        if (ReadVolume() == target) return;
+        Marshal.ThrowExceptionForHR(_volume.SetMasterVolume(target, eventContext));
+    }
+
+    public float ReadVolume()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        Marshal.ThrowExceptionForHR(_volume.GetMasterVolume(out var volume));
+        return volume;
     }
 
     public void SetMute(bool muted, Guid eventContext)

@@ -16,6 +16,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
+using Windows.Graphics;
 
 namespace VoiceDucker;
 
@@ -31,6 +32,12 @@ public sealed partial class CloseChoiceWindow : Window
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
         NativeWindowOwner.SetOwner(WinRT.Interop.WindowNative.GetWindowHandle(this), ownerHandle);
         _owner = AppWindow.GetFromWindowId(Win32Interop.GetWindowIdFromWindow(ownerHandle));
+        // Place the still-hidden child on the owner's monitor before XAML is
+        // measured, so RasterizationScale reflects that monitor's DPI.
+        var workArea = DisplayArea.GetFromWindowId(_owner.Id, DisplayAreaFallback.Primary).WorkArea;
+        AppWindow.MoveAndResize(new RectInt32(workArea.X, workArea.Y,
+            Math.Min(AppWindow.Size.Width, workArea.Width),
+            Math.Min(AppWindow.Size.Height, workArea.Height)));
         ClosePanel.Loaded += OnClosePanelLoaded;
     }
 

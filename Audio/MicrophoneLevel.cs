@@ -11,6 +11,7 @@
  * License: MIT
  * VBWR E */
 
+using System.Buffers.Binary;
 using NAudio.Wave;
 
 namespace VoiceDucker.Audio;
@@ -22,19 +23,29 @@ internal static class MicrophoneLevel
 
     public static bool IsSupported(WaveFormat format)
     {
+        ArgumentNullException.ThrowIfNull(format);
         var encoding = ResolveEncoding(format);
-        return (encoding == WaveFormatEncoding.IeeeFloat && format.BitsPerSample == 32)
+        return format.Channels > 0 && format.SampleRate > 0 &&
+            ((encoding == WaveFormatEncoding.IeeeFloat && format.BitsPerSample == 32)
             || (encoding == WaveFormatEncoding.Pcm &&
-                (format.BitsPerSample == 16 || format.BitsPerSample == 24 || format.BitsPerSample == 32));
+                (format.BitsPerSample == 16 || format.BitsPerSample == 24 || format.BitsPerSample == 32)));
     }
 
     // Software gain on captured RMS is equivalent to scaling PCM before level detection.
-    public static double ApplyGain(double rms, int decibels) => rms * Math.Pow(10, decibels / 20.0);
+    public static double ApplyGain(double rms, int decibels)
+    {
+        if (!double.IsFinite(rms) || rms <= 0) return 0;
+        var gained = rms * Math.Pow(10, decibels / 20.0);
+        return double.IsFinite(gained) ? gained : double.MaxValue;
+    }
 
     public static double Rms(ReadOnlySpan<byte> audio, WaveFormat format)
     {
+        if (!IsSupported(format))
+            throw new NotSupportedException($"Unsupported microphone format: {format}");
+
         var sampleBytes = format.BitsPerSample / 8;
-        if (sampleBytes == 0 || audio.Length < sampleBytes)
+        if (audio.Length < sampleBytes)
         {
             return 0;
         }
@@ -42,17 +53,20 @@ internal static class MicrophoneLevel
         var encoding = ResolveEncoding(format);
         double sum = 0;
         var count = audio.Length / sampleBytes;
+        var validCount = 0;
         for (var sample = 0; sample < count; sample++)
         {
             var offset = sample * sampleBytes;
             double value;
             if (encoding == WaveFormatEncoding.IeeeFloat)
             {
-                value = BitConverter.ToSingle(audio.Slice(offset, 4));
+                value = BitConverter.Int32BitsToSingle(
+                    BinaryPrimitives.ReadInt32LittleEndian(audio.Slice(offset, 4)));
+                if (!double.IsFinite(value)) continue;
             }
             else if (sampleBytes == 2)
             {
-                value = BitConverter.ToInt16(audio.Slice(offset, 2)) / 32768.0;
+                value = BinaryPrimitives.ReadInt16LittleEndian(audio.Slice(offset, 2)) / 32768.0;
             }
             else if (sampleBytes == 3)
             {
@@ -65,13 +79,14 @@ internal static class MicrophoneLevel
             }
             else
             {
-                value = BitConverter.ToInt32(audio.Slice(offset, 4)) / 2147483648.0;
+                value = BinaryPrimitives.ReadInt32LittleEndian(audio.Slice(offset, 4)) / 2147483648.0;
             }
 
             sum += value * value;
+            validCount++;
         }
 
-        return Math.Sqrt(sum / count);
+        return validCount == 0 ? 0 : Math.Sqrt(sum / validCount);
     }
 
     private static WaveFormatEncoding ResolveEncoding(WaveFormat format)

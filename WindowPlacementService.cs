@@ -18,18 +18,23 @@ internal sealed class WindowPlacementService : IDisposable
     private readonly IntPtr _handle;
     private readonly Func<bool> _isSettingsPaneOpen;
     private readonly Action<string> _reportError;
+    private readonly Func<WindowPlacementState?> _load;
+    private readonly Action<WindowPlacementState> _save;
     private readonly DispatcherTimer _saveTimer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     private WindowPlacementState? _state;
 
     public bool IsTracking { get; private set; }
     public event Action? SizeChanged;
 
-    public WindowPlacementService(Window window, Func<bool> isSettingsPaneOpen, Action<string> reportError)
+    public WindowPlacementService(Window window, Func<bool> isSettingsPaneOpen, Action<string> reportError,
+        Func<WindowPlacementState?> load, Action<WindowPlacementState> save)
     {
         _window = window.AppWindow;
         _handle = WinRT.Interop.WindowNative.GetWindowHandle(window);
         _isSettingsPaneOpen = isSettingsPaneOpen;
         _reportError = reportError;
+        _load = load;
+        _save = save;
         _saveTimer.Tick += OnSaveTimer;
     }
 
@@ -38,7 +43,7 @@ internal sealed class WindowPlacementService : IDisposable
         settingsPaneOpen = false;
         try
         {
-            _state = WindowPlacementStore.Load();
+            _state = _load();
             if (_state is null) return false;
 
             var monitors = GetMonitors();
@@ -79,7 +84,7 @@ internal sealed class WindowPlacementService : IDisposable
         try
         {
             Capture();
-            if (_state is not null) WindowPlacementStore.Save(_state);
+            if (_state is not null) _save(_state);
         }
         catch (Exception exception)
         {
@@ -140,7 +145,7 @@ internal sealed class WindowPlacementService : IDisposable
     {
         try
         {
-            if (_state is not null) WindowPlacementStore.Save(_state);
+            if (_state is not null) _save(_state);
         }
         catch (Exception exception)
         {

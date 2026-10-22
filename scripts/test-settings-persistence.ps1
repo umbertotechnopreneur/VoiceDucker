@@ -30,7 +30,6 @@ $sourceRoot = [System.Security.SecurityElement]::Escape($projectRoot)
     <Compile Include="$sourceRoot\SettingsStore.cs" Link="SettingsStore.cs" />
     <Compile Include="$sourceRoot\Audio\DuckingSettings.cs" Link="DuckingSettings.cs" />
     <Compile Include="$sourceRoot\Audio\PlaybackIdentity.cs" Link="PlaybackIdentity.cs" />
-    <Compile Include="$sourceRoot\Audio\VoiceGate.cs" Link="VoiceGate.cs" />
     <Compile Include="$sourceRoot\Licensing\LicensePolicy.cs" Link="LicensePolicy.cs" />
   </ItemGroup>
 </Project>
@@ -165,10 +164,10 @@ Check(!File.Exists(path + ".tmp"), "A successful save left its temporary file be
 
 var defaults = new DuckingSettings();
 Check(!defaults.EnableMicrophoneOnWindowsStartup && defaults.LastSettingsSection == "" &&
-    !defaults.ShouldEnableMicrophoneOnLaunch(false) && !defaults.ShouldEnableMicrophoneOnLaunch(true),
-    "Default startup preferences opened microphone capture.");
-Check(expected.ShouldEnableMicrophoneOnLaunch(true) && !expected.ShouldEnableMicrophoneOnLaunch(false),
-    "Microphone startup opt-in was not restricted to Windows startup.");
+    !defaults.ShouldEnableMicrophoneOnLaunch(),
+    "Default launch preferences opened microphone capture.");
+Check(expected.ShouldEnableMicrophoneOnLaunch(),
+    "The microphone startup opt-in did not enable monitoring on app launch.");
 foreach (var section in new[] { "", "microphone", "volume", "apps" })
 {
     foreach (var enableMicrophone in new[] { false, true })
@@ -181,9 +180,8 @@ foreach (var section in new[] { "", "microphone", "volume", "apps" })
         var restored = SettingsStore.Load(path, out error);
         Check(error is null && SameSettings(restored, preference),
             "The selected settings section or microphone startup preference did not survive a reload.");
-        Check(!restored.ShouldEnableMicrophoneOnLaunch(false) &&
-            restored.ShouldEnableMicrophoneOnLaunch(true) == enableMicrophone,
-            "A saved startup choice enabled the microphone for the wrong launch type.");
+        Check(restored.ShouldEnableMicrophoneOnLaunch() == enableMicrophone,
+            "A saved microphone startup choice did not control monitoring on app launch.");
     }
 }
 foreach (var invalidSection in new[] { "unknown", null })
@@ -194,7 +192,7 @@ foreach (var invalidSection in new[] { "unknown", null })
 File.WriteAllText(path, "{}");
 var missingPreferences = SettingsStore.Load(path, out error);
 Check(error is null && !missingPreferences.EnableMicrophoneOnWindowsStartup &&
-    missingPreferences.LastSettingsSection == "",
+    !missingPreferences.ShouldEnableMicrophoneOnLaunch() && missingPreferences.LastSettingsSection == "",
     "Absent preferences did not keep the microphone opt-in off.");
 SettingsStore.Save(defaults, path);
 Check(SameSettings(SettingsStore.Load(path, out error), defaults) && error is null,
@@ -238,108 +236,7 @@ catch (IOException) { }
 catch (UnauthorizedAccessException) { }
 Check(!File.Exists(blockedPath + ".tmp"), "A failed save left its temporary file behind.");
 
-// Deterministic time and synthetic levels exercise pause behavior without audio devices.
-long now = 1000;
-var gate = new VoiceGate(() => now) { HoldMilliseconds = 650 };
-Check(!gate.IsSpeaking, "A quiet startup incorrectly lowered playback.");
-gate.Observe(0);
-Check(!gate.IsSpeaking, "Silence incorrectly opened the sound gate.");
-gate.Observe(gate.Threshold);
-Check(gate.IsSpeaking, "Sound at the threshold did not open the sound gate.");
-now += 649;
-gate.Observe(gate.Threshold / 2);
-Check(gate.IsSpeaking, "A brief pause was not held.");
-now += 2;
-Check(!gate.IsSpeaking, "Playback remained held after the pause deadline.");
-gate.Observe(gate.Threshold * 2);
-now += 500;
-gate.Observe(gate.Threshold);
-gate.Observe(0);
-now += 500;
-Check(gate.IsSpeaking, "Resumed sound did not reset the pause timer.");
-now += 151;
-Check(!gate.IsSpeaking, "A renewed pause did not expire.");
-gate.HoldMilliseconds = 0;
-gate.Observe(gate.Threshold);
-Check(gate.IsSpeaking, "Zero delay suppressed an active threshold observation.");
-now += 50;
-Check(gate.IsSpeaking, "Zero delay released sustained sound between capture buffers.");
-gate.Observe(0);
-Check(!gate.IsSpeaking, "Zero delay added a pause after sound stopped.");
-gate.Observe(gate.Threshold);
-gate.Observe(0);
-Check(!gate.IsSpeaking, "Zero delay did not release silence in the same clock tick.");
-gate.HoldMilliseconds = 650;
-gate.Observe(gate.Threshold);
-gate.Observe(0);
-now += 300;
-gate.HoldMilliseconds = 200;
-Check(!gate.IsSpeaking, "Shortening the delay did not release an existing pause.");
-gate.HoldMilliseconds = 1000;
-Check(gate.IsSpeaking, "Lengthening the delay did not apply to the most recent sound.");
-now += 701;
-Check(!gate.IsSpeaking, "The lengthened pause did not expire.");
-// A fixed synthetic input must change classification when the user changes threshold.
-var adjustable = new VoiceGate(() => now) { HoldMilliseconds = 0, HysteresisDecibels = 0 };
-adjustable.Observe(0.01);
-Check(!adjustable.IsSpeaking, "A quiet signal exceeded the default threshold.");
-adjustable.Threshold = (expected with { ThresholdDecibels = -46 }).GetThresholdAmplitude();
-Check(adjustable.IsSpeaking, "Lowering the threshold did not detect the existing quieter signal.");
-adjustable.Threshold = (expected with { ThresholdDecibels = -20 }).GetThresholdAmplitude();
-Check(!adjustable.IsSpeaking, "Raising the threshold did not release a quieter signal.");
-foreach (var decibels in new[] { -60.0, 0.0 })
-{
-    adjustable.Threshold = (expected with { ThresholdDecibels = decibels }).GetThresholdAmplitude();
-    adjustable.Observe(adjustable.Threshold * 0.99);
-    Check(!adjustable.IsSpeaking, "A signal below the selected threshold opened the gate.");
-    adjustable.Observe(adjustable.Threshold);
-    Check(adjustable.IsSpeaking, "A signal at the selected threshold did not open the gate.");
-}
-foreach (var invalid in new[] { 0.0, -1.0, 1.01, double.NaN, double.PositiveInfinity })
-{
-    try
-    {
-        adjustable.Threshold = invalid;
-        throw new InvalidOperationException("An invalid gate threshold was accepted.");
-    }
-    catch (ArgumentOutOfRangeException) { }
-}
-double Level(double db) => Math.Pow(10, db / 20);
-var stableSettings = new DuckingSettings { ThresholdDecibels = -30, HysteresisDecibels = 6, RestoreDelayMilliseconds = 650 };
-var stable = new VoiceGate(() => now);
-stable.Configure(stableSettings);
-stable.Observe(Level(-33));
-Check(!stable.IsSpeaking, "A quiet startup inside the hysteresis band opened detection.");
-stable.Observe(Level(-30));
-Check(stable.IsSpeaking, "The trigger boundary did not activate detection.");
-for (var index = 0; index < 40; index++)
-{
-    now += 100;
-    stable.Observe(Level(index % 2 == 0 ? -31 : -29));
-    Check(stable.IsSpeaking, "Jitter around the trigger interrupted active detection.");
-}
-// Use the same amplitude calculation as the detector to test the exact release boundary.
-stable.Observe(stableSettings.GetThresholdAmplitude() * Math.Pow(10, -6 / 20.0));
-Check(stable.IsSpeaking, "The release boundary should still sustain detection.");
-stable.Observe(Level(-36.1));
-Check(stable.IsSpeaking, "Crossing the release threshold skipped the configured hold.");
-now += 649;
-stable.Configure(stableSettings);
-Check(stable.IsSpeaking, "The release hold expired too early.");
-now += 2;
-stable.Configure(stableSettings);
-Check(!stable.IsSpeaking, "Repeated configuration refreshed the hold without new sound.");
-stable.Observe(Level(-33));
-Check(!stable.IsSpeaking, "Returning into the band reactivated a closed detector.");
-stable.Observe(Level(-29));
-stable.Observe(Level(-33));
-stable.Configure(stableSettings with { HysteresisDecibels = 0, RestoreDelayMilliseconds = 0 });
-Check(!stable.IsSpeaking, "Disabling hysteresis did not restore single-threshold detection immediately.");
-stable.Configure(stableSettings with { RestoreDelayMilliseconds = 0 });
-stable.Observe(Level(-29));
-stable.Observe(Level(-33));
-stable.Configure(stableSettings with { ThresholdDecibels = -20, RestoreDelayMilliseconds = 0 });
-Check(!stable.IsSpeaking, "A live trigger change did not recompute the release threshold.");
+// Detector behavior is covered by test-microphone-pipeline.ps1 with synthetic samples.
 foreach (var gap in new[] { 0, 12 })
 {
     var boundary = expected with { HysteresisDecibels = gap };
@@ -347,7 +244,7 @@ foreach (var gap in new[] { 0, 12 })
     Check(SameSettings(SettingsStore.Load(path, out error), boundary) && error is null,
         "A valid hysteresis boundary did not survive a settings reload.");
 }
-Console.WriteLine("PASS: persistence, current defaults, validation and pause behavior; hysteresis quiet startup, trigger/release boundaries, jitter, timed release, no reopening inside the band, live threshold/gap changes and disabled mode. No microphone or playback capture.");
+Console.WriteLine("PASS: settings persistence, validation, startup opt-in, process exclusions and license boundaries. No microphone or playback access.");
 '@ | Set-Content -LiteralPath (Join-Path $testRoot 'Program.cs') -Encoding utf8
 
 & dotnet build (Join-Path $testRoot 'PersistenceTests.csproj') -c Release -p:ImportDirectoryBuildProps=false --nologo

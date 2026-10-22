@@ -19,6 +19,9 @@ internal sealed class PlaybackVolumeEvents
 
     public Guid EventContext { get; } = Guid.NewGuid();
 
+    // UI commands take their order when issued, not later when the worker executes them.
+    public long NextIntentVersion() => Interlocked.Increment(ref _version);
+
     public ExternalVolumeChange? Latest(string key) => _changes.GetValueOrDefault(key);
 
     internal VolumeEventSink CreateSink(string key) => new(this, key);
@@ -35,7 +38,7 @@ internal sealed class PlaybackVolumeEvents
         {
             if (Volatile.Read(ref _active) != 0 && eventContext != owner.EventContext)
             {
-                var change = new ExternalVolumeChange(Interlocked.Increment(ref owner._version), volume, isMuted);
+                var change = new ExternalVolumeChange(owner.NextIntentVersion(), volume, isMuted);
                 owner._changes.AddOrUpdate(key, change,
                     (_, previous) => previous.Version > change.Version ? previous : change);
             }

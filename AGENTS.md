@@ -15,11 +15,25 @@ network calls or startup registration without a request.
   Never adjust system master volume or muted or silent sessions.
 - Capture playback-session volume baselines when the app opens and keep them
   unchanged until it exits, including across Disable/Enable and external mixer
-  changes. Capture new sessions when first observed. Restore changed sessions
-  to those baselines and report failures instead of claiming audio was restored.
-- Keep microphone capture opt-in and in memory only. Manual launches keep capture
-  off. Windows startup may enable it only through the separate saved microphone
-  opt-in, after the playback snapshot and normal license checks.
+  changes. Capture new sessions when first observed. These are safety restoration
+  levels for Disable and exit. Normal listening volume is separate: the slider
+  displays actual volume and edits it through the model; the worker derives normal
+  volume using the current reduction. Voice applies that reduction to normal volume,
+  and silence returns to it. Never
+  derive normal volume from an intermediate fade or an app-generated callback.
+  Report restoration failures instead of claiming audio was restored.
+- Keep application state and rules in the application object model. The UI renders
+  immutable model snapshots and sends typed commands. It must not read the mixer,
+  own settings or license policy, classify microphone levels, or control capture
+  directly. UI-only focus, editing, scroll, window geometry and animation state
+  may remain in view adapters.
+- Use one app-lifetime audio worker for capture lifecycle, observations, detection,
+  session discovery and mixer writes, including discovery while capture is off.
+- Keep microphone capture opt-in and in memory only. The saved **Enable microphone
+  on startup** opt-in is off by default, independent of **Start with Windows**, and
+  applies to every app launch, including manual launches. Start capture only after
+  the playback snapshot and normal license checks. Changing the preference does
+  not start microphone capture immediately.
 - Tag all mixer writes with the app's EventContext and receive external session
   volume/mute changes through Core Audio callbacks, including while disabled.
   Unregister callbacks, stop UI timers and release audio resources on exit.
@@ -56,8 +70,9 @@ network calls or startup registration without a request.
   planned app stop/restart before executing it. Forced termination is authorized
   for this deployment workflow without another confirmation. Install the package
   and verify its version and deployment status without UI tests. Preserve saved
-  settings and restart the app with microphone capture off as announced. Do not
-  perform additional validation restarts. An explicit request to compile only or
+  settings and restart the app according to the saved **Enable microphone on
+  startup** preference as announced. Do not perform additional validation
+  restarts. An explicit request to compile only or
   skip installation takes precedence.
 
 ## Shared publication interface

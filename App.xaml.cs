@@ -67,8 +67,7 @@ public partial class App : Application
             return;
         }
 
-        var isWindowsStartup = StartupRegistration.IsWindowsStartupLaunch();
-        _window = new MainWindow(isWindowsStartup);
+        _window = new MainWindow();
         _window.Closed += (_, _) =>
         {
             _window = null;

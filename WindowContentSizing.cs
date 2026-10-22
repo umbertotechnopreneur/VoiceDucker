@@ -26,7 +26,10 @@ internal static class WindowContentSizing
         AppWindow? owner = null, bool preservePosition = false, double additionalWidth = 0)
     {
         var scale = Math.Max(0.1, content.XamlRoot?.RasterizationScale ?? 1);
-        var workArea = DisplayArea.GetFromWindowId(window.AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
+        // Owner position, window size and work area all use physical desktop
+        // pixels. A newly created child may still belong to another monitor.
+        var workArea = DisplayArea.GetFromWindowId(owner?.Id ?? window.AppWindow.Id,
+            DisplayAreaFallback.Primary).WorkArea;
         var edge = (int)Math.Ceiling(20 * scale);
         var clientWidth = Math.Max(1, Math.Min(
             (int)Math.Ceiling((preferredWidth + additionalWidth) * scale), workArea.Width - 2 * edge));
