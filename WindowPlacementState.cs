@@ -4,13 +4,23 @@ using System.Text.Json.Serialization;
 
 namespace VoiceDucker;
 
+/// <summary>
+/// Stores validated physical desktop coordinates for a window or display work area.
+/// </summary>
 internal sealed record WindowBounds(int X, int Y, int Width, int Height)
 {
+    #region Public state and events
+
     [JsonIgnore]
     public bool IsValid => Width is > 0 and <= 100_000 && Height is > 0 and <= 100_000 &&
                            X is >= -1_000_000 and <= 1_000_000 && Y is >= -1_000_000 and <= 1_000_000;
+
+    #endregion
 }
 
+/// <summary>
+/// Keeps saved window bounds and display information needed to restore logical size across DPI changes.
+/// </summary>
 internal sealed record WindowPlacementState(
     WindowBounds Bounds,
     WindowBounds WorkArea,
@@ -20,10 +30,19 @@ internal sealed record WindowPlacementState(
     bool Maximized,
     bool SettingsPaneOpen)
 {
+    #region Public state
+
     [JsonIgnore]
     public bool IsValid => Bounds is { IsValid: true } && WorkArea is { IsValid: true } &&
                            Dpi is >= 48 and <= 960 && MonitorId is not null && MonitorName is not null;
 
+    #endregion
+
+    #region Public methods
+
+    /// <summary>
+    /// Preserves logical size and monitor-relative position, then clamps the restored bounds to the target display.
+    /// </summary>
     public WindowBounds RestoreBounds(WindowBounds targetWorkArea, uint targetDpi)
     {
         // Store physical pixels, but preserve logical size and monitor-relative offsets
@@ -33,9 +52,13 @@ internal sealed record WindowPlacementState(
         var height = Math.Clamp((int)Math.Round(Bounds.Height * ratio), 1, targetWorkArea.Height);
         var x = targetWorkArea.X + (int)Math.Round((Bounds.X - WorkArea.X) * ratio);
         var y = targetWorkArea.Y + (int)Math.Round((Bounds.Y - WorkArea.Y) * ratio);
-        return new WindowBounds(
-            Math.Clamp(x, targetWorkArea.X, targetWorkArea.X + targetWorkArea.Width - width),
-            Math.Clamp(y, targetWorkArea.Y, targetWorkArea.Y + targetWorkArea.Height - height),
-            width, height);
+        var maximumX = targetWorkArea.X + targetWorkArea.Width - width;
+        var maximumY = targetWorkArea.Y + targetWorkArea.Height - height;
+        var restoredX = Math.Clamp(x, targetWorkArea.X, maximumX);
+        var restoredY = Math.Clamp(y, targetWorkArea.Y, maximumY);
+
+        return new WindowBounds(restoredX, restoredY, width, height);
     }
+
+    #endregion
 }

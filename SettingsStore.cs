@@ -24,12 +24,24 @@ namespace VoiceDucker;
 /// </summary>
 internal static class SettingsStore
 {
+    #region Private fields
+
     private static readonly string SettingsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "VibeWare", "VoiceDucker", "settings.json");
 
+    #endregion
+
+    #region Public methods
+
+    /// <summary>
+    /// Loads validated preferences, returning defaults and an error when saved data is unreadable.
+    /// </summary>
     public static DuckingSettings Load(out string? error) => Load(SettingsPath, out error);
 
+    /// <summary>
+    /// Loads validated preferences, returning defaults and an error when saved data is unreadable.
+    /// </summary>
     internal static DuckingSettings Load(string settingsPath, out string? error)
     {
         error = null;
@@ -55,8 +67,14 @@ internal static class SettingsStore
         }
     }
 
+    /// <summary>
+    /// Validates preferences and atomically replaces the saved document.
+    /// </summary>
     public static void Save(DuckingSettings settings) => Save(settings, SettingsPath);
 
+    /// <summary>
+    /// Validates preferences and atomically replaces the saved document.
+    /// </summary>
     internal static void Save(DuckingSettings settings, string settingsPath)
     {
         if (!settings.IsValid)
@@ -66,4 +84,6 @@ internal static class SettingsStore
 
         AtomicJsonFile.Write(settingsPath, settings);
     }
+
+    #endregion
 }

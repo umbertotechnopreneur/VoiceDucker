@@ -2,89 +2,68 @@
 
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
-using VoiceDucker.Audio;
+using VoiceDucker.Controls;
+using VoiceDucker.Model;
 using Windows.Storage.Streams;
+using Windows.System;
 using Windows.UI;
 
 namespace VoiceDucker;
 
-// Playback rows and hidden-app presentation. Audio volume ownership stays in the engine.
+/// <summary>
+/// Presents playback rows from the application model while preserving active editing and focus.
+/// </summary>
 public sealed partial class MainWindow
 {
-    private void RefreshStreamRows()
+    #region Implementation
+
+    /// <summary>
+    /// Updates keyed playback controls without replacing rows that are already visible.
+    /// </summary>
+    private void RenderPlaybackRows(IReadOnlyList<PlaybackRowState> streams)
     {
-        if (_playbackMonitor is null)
-        {
-            return;
-        }
-
-        IReadOnlyList<PlaybackStream> streams;
-        try
-        {
-            streams = _playbackMonitor.Read()
-                .Where(stream => !_settings.IsProcessExcluded(stream.Name)).ToArray();
-        }
-        catch (Exception exception)
-        {
-            FeedbackText.Text = $"Audio streams could not be refreshed: {exception.Message}";
-            return;
-        }
-
         var present = streams.Select(stream => stream.Key).ToHashSet(StringComparer.Ordinal);
-        var layoutChanged = false;
         foreach (var key in _streamRows.Keys.Where(key => !present.Contains(key)).ToArray())
         {
             StreamRows.Children.Remove(_streamRows[key].Card);
             _streamRows.Remove(key);
-            layoutChanged = true;
         }
 
-        _refreshingStreamRows = true;
-        try
+        foreach (var stream in streams)
         {
-            foreach (var stream in streams.OrderByDescending(stream => stream.IsSpotify)
-                         .ThenBy(stream => stream.Name, StringComparer.OrdinalIgnoreCase))
+            if (!_streamRows.TryGetValue(stream.Key, out var row))
             {
-                if (!_streamRows.TryGetValue(stream.Key, out var row))
-                {
-                    row = CreateStreamRow(stream);
-                    _streamRows.Add(stream.Key, row);
-                    StreamRows.Children.Add(row.Card);
-                    _ = LoadStreamIconAsync(stream.ProcessId, stream.Key, row.Icon);
-                    layoutChanged = true;
-                }
-
-                var peak = stream.Muted ? 0 : Math.Clamp(stream.Peak, 0, 1);
-                row.Meter.Value = peak <= 0 ? 0 : Math.Clamp((20 * Math.Log10(peak) + 60) / 60 * 100, 0, 100);
-                row.Slider.IsEnabled = !stream.Muted;
-                if (!row.Interacting && row.Slider.FocusState == FocusState.Unfocused)
-                {
-                    row.Slider.Value = Math.Clamp(stream.Volume * 100, 0, 100);
-                    row.Percentage.Text = stream.Muted
-                        ? "MUTED"
-                        : $"{Math.Round(stream.Volume * 100):0}%";
-                }
+                row = CreateStreamRow(stream);
+                _streamRows.Add(stream.Key, row);
+                StreamRows.Children.Add(row.Card);
+                _ = LoadStreamIconAsync(stream.ProcessId, stream.Key, row.Icon);
             }
-        }
-        finally
-        {
-            _refreshingStreamRows = false;
+
+            row.Meter.Value = stream.SignalPercent;
+            row.Slider.IsEnabled = stream.CanEdit;
+            row.Percentage.Text = stream.VolumeText;
+            ToolTipService.SetToolTip(row.Slider, stream.VolumeHelp);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetHelpText(row.Slider, stream.VolumeHelp);
+            if (!row.Interacting)
+            {
+                row.Slider.Value = stream.SliderPercent;
+            }
         }
 
         NoStreamsText.Visibility = streams.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (layoutChanged && !_windowPlacement.IsTracking && !_restoredWindowPlacement)
-        {
-            FitMainWindow();
-        }
     }
 
+    /// <summary>
+    /// Loads a process icon asynchronously and applies it only if its original row still exists.
+    /// </summary>
     private async Task LoadStreamIconAsync(int processId, string key, Image icon)
     {
         try
         {
-            var png = await Task.Run(() => ProcessIcon.ReadPng(processId));
+            var png = await Task.Run(() => Audio.ProcessIcon.ReadPng(processId));
             if (png is null)
             {
                 return;
@@ -97,6 +76,7 @@ public sealed partial class MainWindow
                 await writer.StoreAsync();
                 writer.DetachStream();
             }
+
             stream.Seek(0);
             var source = new BitmapImage();
             await source.SetSourceAsync(stream);
@@ -111,7 +91,10 @@ public sealed partial class MainWindow
         }
     }
 
-    private StreamRow CreateStreamRow(PlaybackStream stream)
+    /// <summary>
+    /// Builds one playback row and forwards user volume and visibility commands to the model.
+    /// </summary>
+    private StreamRow CreateStreamRow(PlaybackRowState stream)
     {
         var name = new TextBlock
         {
@@ -123,12 +106,13 @@ public sealed partial class MainWindow
         };
         var percentage = new TextBlock
         {
-            Text = $"{Math.Round(stream.Volume * 100):0}%",
+            Text = stream.VolumeText,
             FontFamily = new FontFamily("Consolas"),
             FontSize = 13,
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Right
         };
+
         var title = new Grid { ColumnSpacing = 8 };
         title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
         title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -146,6 +130,7 @@ public sealed partial class MainWindow
         Grid.SetColumn(percentage, 2);
         title.Children.Add(nameAndHide);
         title.Children.Add(percentage);
+
         // Reserve the X's space so hovering never shifts the title or volume.
         // Keyboard focus also reveals it, without requiring a mouse.
         var pointerOverTitle = false;
@@ -162,6 +147,7 @@ public sealed partial class MainWindow
         };
         hide.GotFocus += (_, _) => hide.Opacity = 1;
         hide.LostFocus += (_, _) => hide.Opacity = pointerOverTitle ? 1 : 0;
+
         var icon = new Image { Width = 24, Height = 24, Stretch = Stretch.Uniform };
         var iconPlaceholder = new FontIcon
         {
@@ -175,21 +161,25 @@ public sealed partial class MainWindow
         iconLayer.Children.Add(icon);
         title.Children.Add(iconLayer);
 
-        var slider = new Slider
+        var slider = new ScrollSafeSlider
         {
+            Style = (Style)SettingsSplitView.Resources["VoiceDuckerSliderStyle"],
             Minimum = 0,
             Maximum = 100,
             StepFrequency = 1,
-            Value = Math.Clamp(stream.Volume * 100, 0, 100),
-            IsEnabled = !stream.Muted
+            Value = stream.SliderPercent,
+            IsEnabled = stream.CanEdit
         };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(slider, $"{stream.Name} volume");
-        // The meter draws the track; the native slider keeps its thumb above it in every state.
-        foreach (var state in new[] { "", "PointerOver", "Pressed", "Disabled" })
-        {
-            slider.Resources[$"SliderTrackFill{state}"] = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
-            slider.Resources[$"SliderTrackValueFill{state}"] = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
-        }
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(slider, $"{stream.Name} playback volume");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetHelpText(slider, stream.VolumeHelp);
+        ToolTipService.SetToolTip(slider, stream.VolumeHelp);
+
+        // Keep the standard round thumb while removing the template's unused
+        // vertical space, so the separate signal meter sits directly below it.
+        slider.Resources["SliderPreContentMargin"] = 9d;
+        slider.Resources["SliderPostContentMargin"] = 9d;
+        slider.Resources["SliderHorizontalHeight"] = 22d;
+
         var meter = new ProgressBar
         {
             Minimum = 0,
@@ -197,77 +187,93 @@ public sealed partial class MainWindow
             Value = 0,
             Height = 4,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(12, 0, 12, 0),
+            Margin = new Thickness(0),
             IsHitTestVisible = false,
             Foreground = new SolidColorBrush(Color.FromArgb(255, 246, 162, 76)),
             Style = (Style)RootPanel.Resources["PlaybackLevelMeterStyle"]
         };
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(meter, $"{stream.Name} audio level");
-        var volumeTrack = new Grid();
-        Canvas.SetZIndex(slider, 1);
-        volumeTrack.Children.Add(meter);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(meter, $"{stream.Name} session output level");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetHelpText(meter,
+            "Session signal after the current session volume is applied, on a decibel scale. System master volume and speaker processing are not included.");
+        var volumeTrack = new StackPanel { Spacing = 2 };
+        ToolTipService.SetToolTip(volumeTrack, "The orange meter follows the session output after volume adjustment, on a decibel scale.");
         volumeTrack.Children.Add(slider);
+        volumeTrack.Children.Add(meter);
+
         var panel = new StackPanel { Spacing = 6 };
         panel.Children.Add(title);
         panel.Children.Add(volumeTrack);
         var row = new StreamRow(panel, slider, meter, percentage, icon);
-        slider.PointerPressed += (_, _) => row.Interacting = true;
-        slider.PointerReleased += (_, _) => row.Interacting = false;
-        slider.PointerCanceled += (_, _) => row.Interacting = false;
-        slider.ValueChanged += (_, args) =>
+
+        // Slider/Thumb can handle these routed events before they reach this row.
+        // Observe handled events too, so a completed drag cannot freeze mixer updates.
+        slider.AddHandler(UIElement.PointerPressedEvent,
+            new PointerEventHandler((_, _) => row.PointerInteracting = true), true);
+        slider.AddHandler(UIElement.PointerReleasedEvent,
+            new PointerEventHandler((_, _) => row.PointerInteracting = false), true);
+        slider.AddHandler(UIElement.PointerCanceledEvent,
+            new PointerEventHandler((_, _) => row.PointerInteracting = false), true);
+        slider.AddHandler(UIElement.PointerCaptureLostEvent,
+            new PointerEventHandler((_, _) => row.PointerInteracting = false), true);
+        // Focus can remain on the slider indefinitely; only active editing pauses refresh.
+        slider.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler((_, args) =>
         {
-            if (_refreshingStreamRows || _playbackMonitor is null)
+            if (IsVolumeSliderKey(args.Key))
+            {
+                row.KeyboardInteracting = true;
+            }
+        }), true);
+        slider.AddHandler(UIElement.KeyUpEvent, new KeyEventHandler((_, args) =>
+        {
+            if (IsVolumeSliderKey(args.Key))
+            {
+                row.KeyboardInteracting = false;
+            }
+        }), true);
+        slider.LostFocus += (_, _) => row.KeyboardInteracting = false;
+        slider.ValueChanged += async (_, args) =>
+        {
+            if (_rendering)
             {
                 return;
             }
 
-            percentage.Text = $"{Math.Round(args.NewValue):0}%";
             try
             {
-                if (!_playbackMonitor.SetVolume(stream.Key, (float)(args.NewValue / 100)))
-                {
-                    FeedbackText.Text = "This audio stream has ended.";
-                }
+                await _model.SetPlaybackVolumeAsync(stream.Key, args.NewValue);
             }
             catch (Exception exception)
             {
-                FeedbackText.Text = $"Volume could not be changed: {exception.Message}";
+                _model.ReportViewError($"Volume could not be changed: {exception.Message}");
             }
         };
+
         return row;
     }
 
+    /// <summary>
+    /// Forwards a visibility command and immediately reconciles the open hidden-app list.
+    /// </summary>
     private void SetProcessHidden(string processName, bool hidden)
     {
-        var normalized = PlaybackIdentity.NormalizeProcessName(processName);
-        var names = _settings.BlacklistedProcesses.Where(name =>
-            !PlaybackIdentity.NormalizeProcessName(name).Equals(normalized, StringComparison.OrdinalIgnoreCase));
-        _settings = _settings with
-        {
-            BlacklistedProcesses = (hidden ? names.Append(normalized) : names)
-                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
-        };
-        ApplyAndSaveSettings();
-        RefreshHiddenApps();
-        RefreshStreamRows();
+        _model.SetProcessHidden(processName, hidden);
+        RefreshHiddenApps(_model.Current.HiddenProcesses);
     }
 
     /// <summary>
     /// Synchronizes hidden entries without rebuilding or dismissing the open flyout.
     /// Existing row controls are retained so keyboard focus and scroll position survive.
     /// </summary>
-    private void RefreshHiddenApps()
+    private void RefreshHiddenApps(IReadOnlyList<string> names)
     {
-        var names = _settings.BlacklistedProcesses.Select(PlaybackIdentity.NormalizeProcessName)
-            .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToArray();
-
         // Update the existing list in place: restoring an app must not dismiss the panel.
         foreach (var item in HiddenAppsList.Items.Cast<ListViewItem>()
                      .Where(item => !names.Contains((string)item.Tag, StringComparer.OrdinalIgnoreCase)).ToArray())
         {
             HiddenAppsList.Items.Remove(item);
         }
-        for (var index = 0; index < names.Length; index++)
+
+        for (var index = 0; index < names.Count; index++)
         {
             var name = names[index];
             var existingItem = index < HiddenAppsList.Items.Count
@@ -291,6 +297,7 @@ public sealed partial class MainWindow
             };
             ToolTipService.SetToolTip(label, name);
             row.Children.Add(label);
+
             var restore = CreateAppActionButton("Show", name);
             Grid.SetColumn(restore, 1);
             row.Children.Add(restore);
@@ -311,10 +318,14 @@ public sealed partial class MainWindow
             };
             HiddenAppsList.Items.Insert(index, item);
         }
-        NoHiddenAppsText.Visibility = names.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        HiddenAppsList.Visibility = names.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+
+        NoHiddenAppsText.Visibility = names.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        HiddenAppsList.Visibility = names.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 
+    /// <summary>
+    /// Creates an accessible show or hide action with the shared subtle button appearance.
+    /// </summary>
     private static Button CreateAppActionButton(string action, string processName)
     {
         var button = new Button
@@ -328,17 +339,51 @@ public sealed partial class MainWindow
         };
         ToolTipService.SetToolTip(button, action);
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, $"{action} {processName}");
+
         return button;
     }
 
+    /// <summary>
+    /// Identifies keys that actively edit a playback slider rather than merely focus it.
+    /// </summary>
+    private static bool IsVolumeSliderKey(VirtualKey key) => key is
+        VirtualKey.Left or VirtualKey.Right or VirtualKey.Up or VirtualKey.Down or
+        VirtualKey.Home or VirtualKey.End or VirtualKey.PageUp or VirtualKey.PageDown;
+
+    /// <summary>
+    /// Retains a row's controls and transient input state between model snapshots.
+    /// </summary>
     private sealed class StreamRow(StackPanel card, Slider slider, ProgressBar meter,
         TextBlock percentage, Image icon)
     {
+        #region Public methods and events
+
+        /// <summary>Gets the row container retained in the playback list.</summary>
         public StackPanel Card { get; } = card;
+
+        /// <summary>Gets the slider that displays and edits the actual playback volume.</summary>
         public Slider Slider { get; } = slider;
+
+        /// <summary>Gets the separate session signal meter.</summary>
         public ProgressBar Meter { get; } = meter;
+
+        /// <summary>Gets the formatted volume caption.</summary>
         public TextBlock Percentage { get; } = percentage;
+
+        /// <summary>Gets the process icon target for asynchronous loading.</summary>
         public Image Icon { get; } = icon;
-        public bool Interacting { get; set; }
+
+        /// <summary>Gets or sets whether a pointer gesture is editing the slider.</summary>
+        public bool PointerInteracting { get; set; }
+
+        /// <summary>Gets or sets whether an editing key is currently held.</summary>
+        public bool KeyboardInteracting { get; set; }
+
+        /// <summary>Gets whether model updates must temporarily preserve the user's slider value.</summary>
+        public bool Interacting => PointerInteracting || KeyboardInteracting;
+
+        #endregion
     }
+
+    #endregion
 }

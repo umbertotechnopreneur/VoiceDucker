@@ -10,10 +10,19 @@ namespace VoiceDucker;
 /// </summary>
 internal static class WindowPlacementStore
 {
+    #region Private fields
+
     internal static readonly string FilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "VibeWare", "VoiceDucker", "window-placement.json");
 
+    #endregion
+
+    #region Public methods
+
+    /// <summary>
+    /// Reads valid saved placement, or returns null when no usable placement is available.
+    /// </summary>
     public static WindowPlacementState? Load(string? path = null)
     {
         path ??= FilePath;
@@ -27,6 +36,9 @@ internal static class WindowPlacementStore
         return state is { IsValid: true } ? state : null;
     }
 
+    /// <summary>
+    /// Validates window placement before atomically persisting it.
+    /// </summary>
     public static void Save(WindowPlacementState state, string? path = null)
     {
         if (!state.IsValid)
@@ -36,4 +48,6 @@ internal static class WindowPlacementStore
 
         AtomicJsonFile.Write(path ?? FilePath, state);
     }
+
+    #endregion
 }

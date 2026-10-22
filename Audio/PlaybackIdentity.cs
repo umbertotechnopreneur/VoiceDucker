@@ -17,16 +17,22 @@ using System.Diagnostics;
 
 namespace VoiceDucker.Audio;
 
+/// <summary>Provides consistent process identities for playback discovery and exclusions.</summary>
 internal static class PlaybackIdentity
 {
+    #region Public methods
+
+    /// <summary>Trims a process name and removes an optional executable extension.</summary>
     public static string NormalizeProcessName(string name) =>
         name.Trim().EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
             ? name.Trim()[..^4]
             : name.Trim();
 
+    /// <summary>Identifies VoiceDucker so its own sessions are never offered for ducking.</summary>
     public static bool IsOwnProcess(string name) =>
         NormalizeProcessName(name).Equals("VoiceDucker", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Reads a live process name, returning an empty value if the process is unavailable.</summary>
     public static string ProcessName(int processId)
     {
         try
@@ -39,4 +45,6 @@ internal static class PlaybackIdentity
             return string.Empty;
         }
     }
+
+    #endregion
 }

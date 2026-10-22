@@ -1,380 +1,282 @@
 # VoiceDucker - Copyright (c) 2026 Umberto Giacobbi. MIT license.
-# Exercises the production session loop against an isolated mixer and clock.
+# Production scalar controller with fake devices and clock; no real audio APIs.
 [CmdletBinding()]
 param()
-
-$ErrorActionPreference = 'Stop'
-$projectRoot = [IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
-$testRoot = Join-Path $projectRoot 'artifacts\playback-restoration-tests'
+$ErrorActionPreference='Stop'
+$projectRoot=[IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
+$testRoot=Join-Path $projectRoot 'artifacts\playback-restoration-tests'
 New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
-$sourceRoot = [Security.SecurityElement]::Escape($projectRoot)
+$sourceRoot=[Security.SecurityElement]::Escape($projectRoot)
 @"
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-  </PropertyGroup>
-  <ItemGroup>
-    <Compile Include="Program.cs" />
-    <Compile Include="Mixer.cs" />
-    <Compile Include="$sourceRoot\Audio\PlaybackSessions.cs" Link="PlaybackSessions.cs" />
-    <Compile Include="$sourceRoot\Audio\PlaybackVolumeSnapshot.cs" Link="PlaybackVolumeSnapshot.cs" />
-    <Compile Include="$sourceRoot\Audio\PlaybackVolumeEvents.cs" Link="PlaybackVolumeEvents.cs" />
-    <Compile Include="$sourceRoot\Audio\AudioDiagnostics.cs" Link="AudioDiagnostics.cs" />
-    <Compile Include="$sourceRoot\Audio\DuckingSettings.cs" Link="DuckingSettings.cs" />
-    <Compile Include="$sourceRoot\Audio\PlaybackIdentity.cs" Link="PlaybackIdentity.cs" />
-    <Compile Include="$sourceRoot\Audio\VoiceGate.cs" Link="VoiceGate.cs" />
-  </ItemGroup>
-</Project>
-"@ | Set-Content (Join-Path $testRoot 'RestorationTests.csproj') -Encoding utf8
-
+ <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework>
+ <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+ <EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup>
+ <ItemGroup><Compile Include="Program.cs"/><Compile Include="FakeMixer.cs"/>
+ <Compile Include="$sourceRoot\Audio\PlaybackSessions.cs" Link="PlaybackSessions.cs"/>
+<Compile Include="$sourceRoot\Audio\PlaybackVolumeEvents.cs" Link="PlaybackVolumeEvents.cs"/>
+<Compile Include="$sourceRoot\Audio\AudioDiagnostics.cs" Link="AudioDiagnostics.cs"/>
+<Compile Include="$sourceRoot\Audio\DuckingSettings.cs" Link="DuckingSettings.cs"/>
+<Compile Include="$sourceRoot\Audio\PlaybackIdentity.cs" Link="PlaybackIdentity.cs"/>
+ </ItemGroup></Project>
+"@ | Set-Content -LiteralPath (Join-Path $testRoot 'RestorationTests.csproj') -Encoding utf8
 @'
-namespace NAudio.CoreAudioApi.Interfaces
-{
-    public enum AudioSessionState { AudioSessionStateActive, AudioSessionStateInactive, AudioSessionStateExpired }
-    public enum AudioSessionDisconnectReason { DisconnectReasonDeviceRemoval }
-    public interface IAudioSessionEvents
-    {
-        int OnSimpleVolumeChanged(float volume, bool isMuted, ref Guid eventContext);
-        int OnDisplayNameChanged(string displayName, ref Guid eventContext);
-        int OnIconPathChanged(string iconPath, ref Guid eventContext);
-        int OnChannelVolumeChanged(uint channelCount, IntPtr newVolumes, uint channelIndex, ref Guid eventContext);
-        int OnGroupingParamChanged(ref Guid groupingId, ref Guid eventContext);
-        int OnStateChanged(AudioSessionState state);
-        int OnSessionDisconnected(AudioSessionDisconnectReason reason);
-    }
+namespace NAudio.CoreAudioApi.Interfaces {
+ public enum AudioSessionState { AudioSessionStateActive,AudioSessionStateInactive,AudioSessionStateExpired }
+ public enum AudioSessionDisconnectReason { DisconnectReasonDeviceRemoval }
+ public interface IAudioSessionEvents {
+ int OnSimpleVolumeChanged(float volume,bool mute,ref Guid context);
+ int OnDisplayNameChanged(string value,ref Guid context); int OnIconPathChanged(string value,ref Guid context);
+ int OnChannelVolumeChanged(uint count,IntPtr values,uint index,ref Guid context);
+ int OnGroupingParamChanged(ref Guid id,ref Guid context);
+ int OnStateChanged(AudioSessionState state); int OnSessionDisconnected(AudioSessionDisconnectReason reason);
+ }
 }
-namespace NAudio.CoreAudioApi
-{
-    public enum DataFlow { Render }
-    public enum DeviceState { Active }
-    public sealed class MMDeviceEnumerator : IDisposable
-    {
-        public static AudioSessionControl Session { get; set; } = new();
-        public IEnumerable<MMDevice> EnumerateAudioEndPoints(DataFlow flow, DeviceState state) => [new()];
-        public void Dispose() { }
-    }
-    public sealed class MMDevice : IDisposable
-    {
-        public string ID => "test-endpoint";
-        public AudioSessionManager AudioSessionManager { get; } = new();
-        public void Dispose() { }
-    }
-    public sealed class AudioSessionManager
-    {
-        public List<AudioSessionControl> Sessions => [MMDeviceEnumerator.Session];
-    }
-    public sealed class AudioSessionControl
-    {
-        public string GetSessionInstanceIdentifier { get; set; } = "test-session";
-        public uint GetProcessID => (uint)Environment.ProcessId;
-        public Interfaces.AudioSessionState State { get; set; } = Interfaces.AudioSessionState.AudioSessionStateActive;
-        public SimpleAudioVolume SimpleAudioVolume { get; } = new();
-        public AudioMeterInformation AudioMeterInformation { get; } = new();
-    }
-    public sealed class SimpleAudioVolume
-    {
-        private float _volume = 1f;
-        public List<Interfaces.IAudioSessionEvents> Sinks { get; } = [];
-        public bool Mute { get; set; }
-        public Guid LastWriteContext { get; private set; }
-        public float Volume { get => _volume; set => SetVolume(value, Guid.Empty); }
-        public void SetVolume(float value, Guid context)
-        {
-            _volume = value;
-            Writes++;
-            LastWriteContext = context;
-            foreach (var sink in Sinks.ToArray()) sink.OnSimpleVolumeChanged(value, Mute, ref context);
-        }
-        public int Writes { get; private set; }
-    }
-    public sealed class AudioMeterInformation
-    {
-        public float MasterPeakValue { get; set; } = 0.5f;
-    }
+namespace VoiceDucker.Audio {
+ internal sealed class FakeSession(string key,float volume) {
+ public string Key{get;}=key; public float Volume{get;set;}=volume; public float Peak{get;set;}=.5f;
+ public bool Muted{get;set;} public bool Present{get;set;}=true; public bool Active{get;set;}=true;
+ public bool FailWrites{get;set;} public bool IgnoreWrites{get;set;} public float Offset{get;set;} public int Writes{get;set;}
+ }
+ internal sealed class FakeMixer(params FakeSession[] sessions):IPlaybackSource {
+ public List<FakeSession> Sessions{get;}=[..sessions];
+ public bool FailRead{get;set;}
+ public PlaybackReadResult Read()=>FailRead?throw new InvalidOperationException("Synthetic read failure"):new(Sessions.Where(s=>s.Present).Select(s=>new PlaybackObservation(s.Key,"Spotify",101,s.Volume,s.Peak,s.Muted,s.Active)).ToArray(),[]);
+ public float ReadVolume(string key)=>Sessions.Single(s=>s.Key==key).Volume;
+ public float SetVolume(string key,float value) {
+ var s=Sessions.Single(s=>s.Key==key); if(s.FailWrites)throw new InvalidOperationException("Synthetic write failure");
+ s.Writes++; if(!s.IgnoreWrites)s.Volume=Math.Clamp(value+s.Offset,0,1); return s.Volume;
+ }
+ public void Dispose(){}
+ }
 }
-namespace VoiceDucker.Audio
-{
-    internal sealed class NativePlaybackSession : IDisposable
-    {
-        public static int ActiveCount { get; private set; }
-        private bool _disposed;
-        private readonly NAudio.CoreAudioApi.SimpleAudioVolume _volume;
-        private readonly PlaybackVolumeEvents.VolumeEventSink? _sink;
-        private NativePlaybackSession(NAudio.CoreAudioApi.SimpleAudioVolume volume,
-            PlaybackVolumeEvents.VolumeEventSink? sink)
-        {
-            _volume = volume;
-            _sink = sink;
-            ActiveCount++;
-            if (sink is not null) volume.Sinks.Add(sink);
-        }
-        public static NativePlaybackSession Open(string endpointId, string instanceId,
-            PlaybackVolumeEvents? events = null) => new(
-                NAudio.CoreAudioApi.MMDeviceEnumerator.Session.SimpleAudioVolume,
-                events?.CreateSink(endpointId + ":" + instanceId));
-        public void SetVolume(float volume, Guid context) => _volume.SetVolume(volume, context);
-        public void Dispose()
-        {
-            if (_disposed) return;
-            _disposed = true;
-            ActiveCount--;
-            _sink?.Deactivate();
-            if (_sink is not null) _volume.Sinks.Remove(_sink);
-        }
-        public static void DisposeAll(IEnumerable<NativePlaybackSession> sessions)
-        {
-            foreach (var session in sessions) session.Dispose();
-        }
-    }
-}
-'@ | Set-Content (Join-Path $testRoot 'Mixer.cs') -Encoding utf8
 
+'@ | Set-Content -LiteralPath (Join-Path $testRoot 'FakeMixer.cs') -Encoding utf8
 @'
-using NAudio.CoreAudioApi;
 using VoiceDucker.Audio;
-
-void Check(bool condition, string message)
-{
-    if (!condition) throw new InvalidOperationException(message);
-}
-
-// The real callback must ignore our context, keep per-session external changes,
-// and stop accepting notifications after unregistration.
+var checks = 0;
+void Check(bool ok, string message) { checks++; if (!ok) throw new InvalidOperationException(message); }
+void Near(float actual, float expected, string message) => Check(Math.Abs(actual-expected)<0.0001f, $"{message}: {actual:R} != {expected:R}");
+long now=1000;
+var settings = new DuckingSettings(50,1000,2000,true);
 var events = new PlaybackVolumeEvents();
-var sink = events.CreateSink("isolated-session");
-var ownContext = events.EventContext;
-sink.OnSimpleVolumeChanged(0.1f, false, ref ownContext);
-Check(events.Latest("isolated-session") is null, "Our own write was classified as external.");
-var externalContext = Guid.NewGuid();
-sink.OnSimpleVolumeChanged(0.42f, false, ref externalContext);
-Check(events.Latest("isolated-session") is { Volume: 0.42f, Muted: false }, "External volume change was lost.");
-sink.OnSimpleVolumeChanged(0.42f, true, ref externalContext);
-var mutedChange = events.Latest("isolated-session");
-Check(mutedChange is { Muted: true } && mutedChange.Version > 1, "External mute change was lost.");
-Check(events.Latest("another-session") is null, "An external change leaked across sessions.");
-sink.Deactivate();
-sink.OnSimpleVolumeChanged(0.8f, false, ref externalContext);
-Check(events.Latest("isolated-session") == mutedChange, "A disposed sink accepted a callback.");
-
-// A genuine external event smaller than the old polling tolerance still restarts
-// a fade. Own fade writes must never feed back into that external-event state.
-MMDeviceEnumerator.Session = new();
-long eventTick = 0;
-var fadeEvents = new PlaybackVolumeEvents();
-using (var observer = NativePlaybackSession.Open("test-endpoint", "test-session", fadeEvents))
-using (var playback = new PlaybackSessions(() => eventTick, volumeEvents: fadeEvents))
-{
-    var settings = new DuckingSettings(90, 1000, 0, true);
-    playback.Update(true, settings);
-    eventTick = 1000;
-    playback.Update(true, settings);
-    var volume = MMDeviceEnumerator.Session.SimpleAudioVolume;
-    Check(fadeEvents.Latest("test-endpoint:test-session") is null, "Own fade callback was external.");
-    volume.Volume = 0.101f;
-    eventTick = 1100;
-    playback.Update(true, settings);
-    Check(volume.Volume == 0.101f, "The external event below the polling tolerance was ignored.");
-    eventTick = 2100;
-    playback.Update(true, settings);
-    Check(Math.Abs(volume.Volume - 0.1f) < 0.00001f, "External callback prevented fade completion.");
-    playback.RestoreAll(0);
-    Check(volume.Volume == 1f && volume.LastWriteContext == fadeEvents.EventContext,
-        "Restoration did not preserve the startup snapshot and our EventContext.");
+var music = new FakeSession("music",1);
+using var source = new FakeMixer(music);
+using var playback = new PlaybackSessions(source,events,()=>now);
+void Tick(bool run,bool speak,int ms=0,DuckingSettings? s=null) { now+=ms; Check(playback.Update(run,speak,s??settings),"Discovery failed."); }
+PlaybackStream Row(string key="music") => playback.Streams.Single(s=>s.Key==key);
+Tick(false,false);
+Check(music.Writes==0,"Initialization changed audio.");
+playback.MonitoringEnabled();
+Tick(true,false);
+Tick(true,true);
+Check(music.Writes==0 && !Row().IsLowered,"Reduction claimed before a mixer write.");
+Tick(true,true,500); Near(music.Volume,.75f,"Fade midpoint");
+Check(Row().IsLowered,"Observed attenuation missing.");
+Tick(true,true,500); Near(music.Volume,.5f,"Fade target");
+var writes=music.Writes;
+for(var i=0;i<20;i++) Tick(true,true,50);
+Check(music.Writes==writes,"Stable target written on polling.");
+for(var cycle=0;cycle<8;cycle++) {
+ Tick(true,false); Tick(true,false,1000); Near(music.Volume,.75f,"Restore midpoint");
+ Tick(true,true); Tick(true,true,1000); Near(music.Volume,.5f,"Interrupted fade ratcheted");
+ Near(Row().NormalVolume,1,"Fade rebased normal");
 }
-Console.WriteLine("PASS: own/external EventContext, volume/mute notifications, session isolation, disposal and sub-tolerance external fades.");
+playback.SetNormalVolume("music",.13f); Tick(true,true);
+Near(Row().NormalVolume,.13f,"Slider normal"); Near(music.Volume,.065f,"13 percent normal must duck to 6.5");
+writes=music.Writes;
+for(var i=0;i<10;i++) Tick(true,true,50);
+Check(music.Writes==writes,"Stable slider projection written repeatedly.");
+Tick(true,false); Tick(true,false,2000); Near(music.Volume,.13f,"Silence must use selected normal");
+Tick(true,true); Tick(true,true,1000); Near(music.Volume,.065f,"New voice cycle");
+playback.RequestStartupRestoration(); Tick(false,false);
+Near(music.Volume,1,"Disable startup baseline"); Near(Row().NormalVolume,.13f,"Disable forgot normal");
+Check(!playback.HasPendingRestoration,"Successful restore still pending.");
+writes=music.Writes;
+for(var i=0;i<10;i++) Tick(false,false,50);
+Check(music.Writes==writes,"Mic-off polling undid startup restoration.");
+playback.MonitoringEnabled(); Tick(true,false); Near(music.Volume,.13f,"Enable retained normal");
+playback.SetNormalVolume("music",.6f); Tick(true,true,s:settings with {ReductionPercent=100,FadeDownMilliseconds=0});
+Near(music.Volume,0,"100 percent attenuation"); Near(Row().NormalVolume,.6f,"Zero output destroyed normal");
+writes=music.Writes;
+playback.SetNormalVolume("music",.7f); Tick(true,true,s:settings with {ReductionPercent=100});
+Check(Row().IsLowered && music.Writes==writes,"Changing normal at zero output lost attenuation or rewrote zero.");
+playback.SetNormalVolume("music",.6f); Tick(true,true,s:settings with {ReductionPercent=100});
+Tick(true,false,s:settings with {ReductionPercent=100}); Tick(true,false,2000,settings with {ReductionPercent=100});
+Near(music.Volume,.6f,"Zero-output cycle normal restore");
+playback.RequestStartupRestoration(); Tick(false,false); Near(music.Volume,1,"Zero-output cycle startup restore");
 
-MMDeviceEnumerator.Session = new();
-using (var playback = new PlaybackSessions())
-{
-    playback.Update(true, new DuckingSettings(90, 0, 0, true));
-    Check(NativePlaybackSession.ActiveCount == 1, "The test did not acquire a native session handle.");
-    MMDeviceEnumerator.Session.State = NAudio.CoreAudioApi.Interfaces.AudioSessionState.AudioSessionStateExpired;
-    playback.Update(false, new DuckingSettings());
-    Check(!playback.HasOwnedSessions && NativePlaybackSession.ActiveCount == 0,
-        "An expired session retained a native handle or an unfinished fade.");
+var sink=events.CreateSink("music");
+var own=events.EventContext;
+sink.OnSimpleVolumeChanged(.3f,false,ref own);
+Check(events.Latest("music") is null,"Own EventContext treated as external.");
+playback.SetNormalVolume("music",1); Tick(true,true,s:settings with {FadeDownMilliseconds=0});
+var external=Guid.NewGuid(); music.Volume=.4f;
+sink.OnSimpleVolumeChanged(.4f,false,ref external); Tick(true,true);
+Near(Row().NormalVolume,.4f,"External callback payload lost"); Near(music.Volume,.2f,"External normal projection");
+sink.OnSimpleVolumeChanged(.6f,false,ref external); Tick(true,true);
+Near(Row().NormalVolume,.4f,"Delayed foreign echo changed normal");
+Near(music.Volume,.2f,"Delayed foreign echo caused cumulative ducking");
+music.Muted=true; sink.OnSimpleVolumeChanged(.2f,true,ref external); writes=music.Writes;
+Tick(true,true); Near(Row().NormalVolume,.4f,"Mute-only event rebased normal");
+Check(music.Writes==writes,"Muted playback changed.");
+playback.RequestStartupRestoration(); Tick(false,false);
+Check(playback.HasPendingRestoration && !playback.CanAdvanceRestoration,"Muted restoration falsely complete.");
+Check(music.Writes==writes,"Restoration wrote muted playback.");
+music.Muted=false; sink.OnSimpleVolumeChanged(.2f,false,ref external); Tick(false,false);
+Near(music.Volume,1,"Deferred unmuted restoration");
+Check(!playback.HasPendingRestoration,"Deferred restoration not acknowledged.");
+sink.Deactivate(); sink.OnSimpleVolumeChanged(.1f,false,ref external);
+Near(events.Latest("music")!.Volume,.2f,"Inactive callback accepted external change");
+
+// User intent is ordered at issue time, independently of when the worker executes it.
+var orderingSink=events.CreateSink("music");
+music.Volume=.8f; orderingSink.OnSimpleVolumeChanged(.8f,false,ref external);
+playback.SetNormalVolume("music",.36f); Tick(true,true);
+Near(Row().NormalVolume,.36f,"Older external event overwrote newer UI command");
+Near(music.Volume,.18f,"Newer UI command was not projected");
+var queuedUiVersion=events.NextIntentVersion();
+music.Volume=.8f; orderingSink.OnSimpleVolumeChanged(.8f,false,ref external);
+playback.SetNormalVolume("music",.36f,queuedUiVersion); Tick(true,true);
+Near(Row().NormalVolume,.8f,"Newer external event lost to an earlier queued UI command");
+Near(music.Volume,.4f,"Newer external command was not projected");
+playback.SetNormalVolume("music",.22f,queuedUiVersion); Tick(true,true);
+Near(Row().NormalVolume,.8f,"An already superseded UI command was replayed");
+orderingSink.Deactivate();
+
+playback.SetNormalVolume("music",1); Tick(true,true,s:settings with {FadeDownMilliseconds=0});
+music.Present=false; playback.RequestStartupRestoration(); Tick(false,false);
+Check(playback.HasPendingRestoration && playback.RestorationError is not null,"Absent owned session falsely restored.");
+music.Present=true; Tick(false,false); Near(music.Volume,1,"Reappearing session startup ownership");
+
+var late=new FakeSession("late",.8f);
+var silent=new FakeSession("silent",.7f){Peak=0};
+var broken=new FakeSession("broken",.9f){FailWrites=true};
+source.Sessions.AddRange([late,silent,broken]); Tick(true,true,s:settings with {FadeDownMilliseconds=0});
+Near(late.Volume,.4f,"Late session duck"); Near(silent.Volume,.7f,"Silent session changed");
+Check(playback.Errors.Any(e=>e.Contains("Synthetic write failure")),"Session failure not exposed.");
+Check(Row("late").IsLowered,"Broken session blocked healthy playback.");
+playback.SetNormalVolume("silent",.5f); Tick(true,true);
+Check(silent.Writes==0,"Normal command changed silent session.");
+silent.Peak=.5f; Tick(true,true); Near(silent.Volume,.25f,"Deferred normal command");
+broken.FailWrites=false; playback.RequestStartupRestoration(); Tick(false,false);
+Near(late.Volume,.8f,"Late startup restore"); Near(silent.Volume,.7f,"Silent-origin startup restore");
+Near(broken.Volume,.9f,"Failed write lost restoration ownership");
+
+var ignored=new FakeSession("ignored",.8f){IgnoreWrites=true};
+var quantized=new FakeSession("quantized",1){Offset=.00005f};
+source.Sessions.AddRange([ignored,quantized]); Tick(true,true,s:settings with {FadeDownMilliseconds=0});
+Check(playback.Errors.Any(e=>e.Contains("did not confirm")),"Ignored write claimed successful.");
+Check(!Row("ignored").IsLowered,"Ignored write reported attenuation.");
+Near(quantized.Volume,.50005f,"Quantized target"); writes=quantized.Writes;
+for(var i=0;i<20;i++) Tick(true,true,50,settings with {FadeDownMilliseconds=0});
+Check(quantized.Writes==writes,"Quantized target written every tick.");
+ignored.IgnoreWrites=false; quantized.Offset=0;
+playback.RequestStartupRestoration(); Tick(false,false); Near(quantized.Volume,1,"Quantized startup restore");
+Check(!playback.HasPendingRestoration,"Final restore unconfirmed.");
+playback.SetNormalVolume("music",.8f); Tick(true,true); Near(music.Volume,.4f,"Exclusion preparation");
+Tick(true,true,s:settings with {BlacklistedProcesses=["Spotify"]});
+Tick(true,true,2000,settings with {BlacklistedProcesses=["Spotify"]});
+Near(music.Volume,.8f,"Exclusion must restore selected normal");
+Check(!Row().IsEligible && !Row().IsLowered,"Excluded stream remained eligible.");
+playback.RequestStartupRestoration(); Tick(false,false); Near(music.Volume,1,"Exclusion replaced startup");
+
+// Re-enabling after a deferred muted restore must not briefly raise startup volume.
+var resumedSession=new FakeSession("resumed",1);
+using var resumedSource=new FakeMixer(resumedSession);
+using var resumed=new PlaybackSessions(resumedSource,new PlaybackVolumeEvents(),()=>now);
+resumed.Update(false,false,settings);
+resumed.SetNormalVolume("resumed",.4f); resumed.Update(true,true,settings);
+Near(resumedSession.Volume,.2f,"Resume preparation");
+resumedSession.Muted=true; resumed.RequestStartupRestoration(); resumed.Update(false,false,settings);
+Check(resumed.HasPendingRestoration,"Muted restore was not retained.");
+resumed.MonitoringEnabled(); writes=resumedSession.Writes;
+resumed.Update(true,true,settings); resumedSession.Muted=false; resumed.Update(true,true,settings);
+Near(resumedSession.Volume,.2f,"Re-enable caused a startup-volume bump");
+Check(resumedSession.Writes==writes,"Re-enable unnecessarily rewrote an already correct target.");
+resumed.RequestStartupRestoration(2000); resumed.Update(false,false,settings);
+now+=1000; resumed.Update(false,false,settings); Near(resumedSession.Volume,.6f,"Exit fade midpoint");
+now+=1000; resumed.Update(false,false,settings); Near(resumedSession.Volume,1,"Exit fade startup target");
+Check(!resumed.HasPendingRestoration,"Exit fade did not finish restoration.");
+
+// Actual slider intent is inverted once, using the gate and reduction consumed in this update.
+var actualSession=new FakeSession("actual",1);
+using var actualSource=new FakeMixer(actualSession);
+var actualEvents=new PlaybackVolumeEvents();
+using var actualController=new PlaybackSessions(actualSource,actualEvents,()=>now);
+var instant=settings with {FadeDownMilliseconds=0,FadeUpMilliseconds=0};
+void ActualTick(bool speaking,DuckingSettings? current=null)=>Check(actualController.Update(true,speaking,current??instant),"Actual slider discovery failed.");
+PlaybackStream ActualRow()=>actualController.Streams.Single();
+void FailedEdit(Task command,string expected) {
+ Check(command.IsCompleted,"A failed actual-volume command did not settle.");
+ try {command.GetAwaiter().GetResult(); Check(false,"Actual-volume command unexpectedly succeeded.");}
+ catch(InvalidOperationException exception) {Check(exception.Message.Contains(expected),"Actual-volume failure was not descriptive: "+exception.Message);}
 }
-Console.WriteLine("PASS: expired sessions release native handles without waiting for application exit.");
-
-// Exercise the actual gate and session loop together with the local listening
-// profile: room noise must release the gate and every new voice must lower again.
-MMDeviceEnumerator.Session = new();
-long gateTick = 0;
-using (var playback = new PlaybackSessions(() => gateTick))
-{
-    var settings = new DuckingSettings(90, 300, 2000, true)
-    {
-        ThresholdDecibels = -37.4, HysteresisDecibels = 3, RestoreDelayMilliseconds = 650
-    };
-    var gate = new VoiceGate(() => gateTick);
-    void Advance(double db, int milliseconds)
-    {
-        for (var elapsed = 0; elapsed < milliseconds; elapsed += 50, gateTick += 50)
-        {
-            gate.Configure(settings);
-            gate.Observe(Math.Pow(10, db / 20));
-            playback.Update(gate.IsSpeaking, settings);
-        }
-    }
-    for (var cycle = 0; cycle < 100; cycle++)
-    {
-        Advance(-32, 400);
-        Check(Math.Abs(MMDeviceEnumerator.Session.SimpleAudioVolume.Volume - 0.1f) < 0.00001f,
-            $"Voice trigger {cycle} did not lower playback to 10%.");
-        Advance(-43, 1000);
-        var rising = MMDeviceEnumerator.Session.SimpleAudioVolume.Volume;
-        Check(rising > 0.1f && rising < 1f, "Playback did not start restoring after room noise released the gate.");
-        Advance(-32, 100);
-        Check(MMDeviceEnumerator.Session.SimpleAudioVolume.Volume < rising,
-            "New voice did not reverse an unfinished restoration immediately.");
-        Advance(-32, 300);
-        Check(Math.Abs(MMDeviceEnumerator.Session.SimpleAudioVolume.Volume - 0.1f) < 0.00001f,
-            "An interrupted restoration compounded the ducking target.");
-        Advance(-43, 2800);
-        Check(MMDeviceEnumerator.Session.SimpleAudioVolume.Volume == 1f && !gate.IsSpeaking,
-            "Room noise did not permit exact full restoration.");
-    }
-    Console.WriteLine("PASS: 100 voice/noise cycles, repeat triggers, immediate reversal during fade back, exact 100% restoration.");
+ActualTick(false);
+var edit=actualController.SetPlaybackVolume("actual",.2f);
+Check(!edit.IsCompleted,"Actual-volume intent was converted before a coherent update.");
+ActualTick(true); edit.GetAwaiter().GetResult();
+Near(ActualRow().NormalVolume,.4f,"20 percent actual must retain 40 percent normal at half gain");
+Near(actualSession.Volume,.2f,"Actual slider was attenuated twice");
+writes=actualSession.Writes;
+for(var i=0;i<100;i++) {ActualTick(true); Near(ActualRow().NormalVolume,.4f,"Polling rebased actual into normal");}
+Check(actualSession.Writes==writes,"Settled actual target was written on 100 polls.");
+edit=actualController.SetPlaybackVolume("actual",.2f); ActualTick(true); edit.GetAwaiter().GetResult();
+Check(actualSession.Writes==writes,"An unchanged actual slider request rewrote the mixer.");
+ActualTick(false); Near(actualSession.Volume,.4f,"Voice release did not restore selected normal");
+for(var cycle=0;cycle<8;cycle++) {ActualTick(true); Near(actualSession.Volume,.2f,"Voice cycle ratcheted actual"); ActualTick(false); Near(actualSession.Volume,.4f,"Voice cycle ratcheted normal");}
+edit=actualController.SetPlaybackVolume("actual",.2f); ActualTick(false); edit.GetAwaiter().GetResult();
+Near(ActualRow().NormalVolume,.2f,"Actual intent used a stale speaking state");
+ActualTick(true); Near(actualSession.Volume,.1f,"Silence edit was not used by the next voice cycle");
+edit=actualController.SetPlaybackVolume("actual",.2f); ActualTick(true,instant with {ReductionPercent=80}); edit.GetAwaiter().GetResult();
+Near(ActualRow().NormalVolume,1,"Actual intent used a stale reduction setting");
+Near(actualSession.Volume,.2f,"New reduction did not own actual conversion");
+edit=actualController.SetPlaybackVolume("actual",.9f); ActualTick(true); edit.GetAwaiter().GetResult();
+Near(ActualRow().NormalVolume,1,"Saturated actual intent exceeded normal unity"); Near(actualSession.Volume,.5f,"Saturated actual intent exceeded ducked ceiling");
+ActualTick(true,instant with {ReductionPercent=100}); writes=actualSession.Writes;
+foreach(var requested in new[]{0f,.2f}) {
+ edit=actualController.SetPlaybackVolume("actual",requested); ActualTick(true,instant with {ReductionPercent=100});
+ FailedEdit(edit,"reduction is 100%"); Near(ActualRow().NormalVolume,1,"Zero gain edit destroyed normal");
 }
+Check(actualSession.Writes==writes,"A rejected zero-gain edit wrote the mixer.");
+ActualTick(false); Near(actualSession.Volume,1,"Rejected zero-gain edits damaged release volume");
+actualSession.Peak=0; writes=actualSession.Writes;
+edit=actualController.SetPlaybackVolume("actual",.2f); ActualTick(false); FailedEdit(edit,"silent");
+Near(ActualRow().NormalVolume,1,"Silent edit changed normal"); Check(actualSession.Writes==writes,"Silent edit wrote the mixer.");
+actualSession.Peak=.5f; actualSession.Muted=true;
+edit=actualController.SetPlaybackVolume("actual",.2f); ActualTick(false); FailedEdit(edit,"muted");
+Near(ActualRow().NormalVolume,1,"Muted edit changed normal"); Check(actualSession.Writes==writes,"Muted edit wrote the mixer."); actualSession.Muted=false;
 
-// Worker scheduling is not exact. A final step smaller than the ownership
-// tolerance must still reach the original level before the next cycle saves it.
-MMDeviceEnumerator.Session = new();
-long repeatedTick = 0;
-using (var playback = new PlaybackSessions(() => repeatedTick))
-{
-    var settings = new DuckingSettings(95, 3000, 15000, true);
-    for (var cycle = 0; cycle < 100; cycle++)
-    {
-        var end = repeatedTick + 3200;
-        for (; repeatedTick < end; repeatedTick += 53) playback.Update(true, settings);
-        end = repeatedTick + 15200;
-        for (; repeatedTick < end; repeatedTick += 53) playback.Update(false, settings);
-    }
-    var actual = MMDeviceEnumerator.Session.SimpleAudioVolume.Volume;
-    Console.WriteLine($"100 completed cycles: volume={actual:P4}");
-    Check(Math.Abs(actual - 1f) < 0.00001f, "Repeated completed fades ratcheted the original volume down.");
-}
+var superseded=actualController.SetPlaybackVolume("actual",.1f);
+edit=actualController.SetPlaybackVolume("actual",.3f);
+Check(superseded.IsCompletedSuccessfully,"A superseded actual intent remained pending."); ActualTick(true); edit.GetAwaiter().GetResult();
+Near(actualSession.Volume,.3f,"A superseded actual intent was replayed"); Near(ActualRow().NormalVolume,.6f,"Latest actual intent lost normal");
+superseded=actualController.SetPlaybackVolume("actual",.1f); actualController.SetNormalVolume("actual",.8f);
+Check(superseded.IsCompletedSuccessfully,"A newer normal command left the actual intent pending."); ActualTick(true); Near(actualSession.Volume,.4f,"A newer normal intent lost priority");
+var actualSink=actualEvents.CreateSink("actual"); var foreign=Guid.NewGuid();
+actualSession.Volume=.7f; actualSink.OnSimpleVolumeChanged(.7f,false,ref foreign);
+edit=actualController.SetPlaybackVolume("actual",.2f); ActualTick(true); edit.GetAwaiter().GetResult();
+Near(actualSession.Volume,.2f,"An older external callback overwrote the actual slider");
+superseded=actualController.SetPlaybackVolume("actual",.1f);
+actualSession.Volume=.8f; actualSink.OnSimpleVolumeChanged(.8f,false,ref foreign); ActualTick(true);
+Check(superseded.IsCompletedSuccessfully,"A newer external intent left an actual command pending."); Near(actualSession.Volume,.4f,"A newer external intent lost priority");
+actualSink.Deactivate();
 
-foreach (var original in new[] { 1f, 0.65f, 0.12f })
-foreach (var fadeUp in new[] { 0, 2000, 15000, 30000 })
-{
-    MMDeviceEnumerator.Session = new();
-    var volume = MMDeviceEnumerator.Session.SimpleAudioVolume;
-    volume.Volume = original;
-    long now = 0;
-    using var playback = new PlaybackSessions(() => now);
-    var settings = new DuckingSettings(95, 3000, fadeUp, true);
-    // Multiple interruptions must never turn a partly restored level into a new baseline.
-    for (var cycle = 0; cycle < 4; cycle++)
-    {
-        for (var elapsed = 0; elapsed <= 3200; elapsed += 50, now += 50)
-            playback.Update(true, settings);
-        for (var elapsed = 0; elapsed <= (cycle < 3 ? 500 : fadeUp + 100); elapsed += 50, now += 50)
-            playback.Update(false, settings);
-    }
-    Check(Math.Abs(volume.Volume - original) < 0.00001f,
-        $"Restore failed: baseline={original:P0}, fade={fadeUp}ms, actual={volume.Volume:P2}");
-    Check(!playback.HasOwnedSessions, "Completed restoration still owns the session.");
-    Console.WriteLine($"PASS: baseline={original:P0}, fade={fadeUp}ms, interrupted cycles restore exactly.");
-}
+actualSession.FailWrites=true; edit=actualController.SetPlaybackVolume("actual",.2f); ActualTick(true); FailedEdit(edit,"Synthetic write failure"); actualSession.FailWrites=false;
+actualSession.IgnoreWrites=true; edit=actualController.SetPlaybackVolume("actual",.1f); ActualTick(true); FailedEdit(edit,"did not confirm"); actualSession.IgnoreWrites=false;
+edit=actualController.SetPlaybackVolume("actual",.2f); actualSource.FailRead=true;
+Check(!actualController.Update(true,true,instant),"A synthetic read failure claimed discovery success."); FailedEdit(edit,"could not be refreshed"); actualSource.FailRead=false; ActualTick(true);
+edit=actualController.SetPlaybackVolume("actual",.2f); actualSession.Present=false; ActualTick(true); FailedEdit(edit,"unavailable"); actualSession.Present=true; ActualTick(true);
+edit=actualController.SetPlaybackVolume("actual",.2f); actualController.RequestStartupRestoration(); FailedEdit(edit,"monitoring stopped");
+Check(actualController.Update(false,false,instant),"Actual controller startup restoration discovery failed.");
+Near(actualSession.Volume,1,"Actual slider changed the immutable startup baseline");
+edit=actualController.SetPlaybackVolume("actual",.2f); actualController.Dispose();
+Check(edit.IsFaulted,"Disposal left an actual-volume intent unresolved.");
+try {edit.GetAwaiter().GetResult(); Check(false,"Disposed actual edit succeeded.");} catch(ObjectDisposedException) {Check(true,"Disposed actual intent settled.");}
+Console.WriteLine($"PASS: {checks} synthetic playback assertions. No Core Audio, microphone, or real mixer access.");
 
-foreach (var manualDuringRestore in new[] { false, true })
-{
-    MMDeviceEnumerator.Session = new();
-    var volume = MMDeviceEnumerator.Session.SimpleAudioVolume;
-    long now = 0;
-    using var playback = new PlaybackSessions(() => now);
-    var settings = new DuckingSettings(95, 0, 15000, true);
-    playback.Update(true, settings);
-    if (manualDuringRestore) playback.Update(false, settings);
-    volume.Volume = 0.42f;
-    now += 50;
-    playback.Update(!manualDuringRestore, settings);
-    playback.RestoreAll(0);
-    Check(volume.Volume == 1f && !playback.HasOwnedSessions,
-        "An external mixer edit replaced the app-lifetime snapshot.");
-}
-
-// Snapshot inactive and silent sessions at launch, before microphone Enable.
-// Worker replacement models Disable/Enable and microphone-device changes.
-foreach (var original in new[] { 1f, 0.65f, 0.12f })
-{
-    MMDeviceEnumerator.Session = new();
-    var session = MMDeviceEnumerator.Session;
-    var volume = session.SimpleAudioVolume;
-    volume.Volume = original;
-    session.State = NAudio.CoreAudioApi.Interfaces.AudioSessionState.AudioSessionStateInactive;
-    session.AudioMeterInformation.MasterPeakValue = 0;
-    var snapshot = new PlaybackVolumeSnapshot();
-    using (var startup = new PlaybackSessions(snapshot: snapshot)) startup.CaptureSnapshot();
-    volume.Volume = 0.42f;
-    session.State = NAudio.CoreAudioApi.Interfaces.AudioSessionState.AudioSessionStateActive;
-    session.AudioMeterInformation.MasterPeakValue = 0.5f;
-    var settings = new DuckingSettings(90, 0, 0, true);
-    for (var enable = 0; enable < 3; enable++)
-    {
-        using var playback = new PlaybackSessions(snapshot: snapshot);
-        playback.CaptureSnapshot(); // Re-observing must never overwrite a captured value.
-        playback.Update(true, settings);
-        Check(Math.Abs(volume.Volume - original * 0.1f) < 0.00001f,
-            "Ducking used a later mixer level instead of the startup snapshot.");
-        playback.RestoreAll(0);
-        Check(volume.Volume == original, "A worker restart discarded the startup snapshot.");
-        volume.Volume = 0.42f;
-    }
-    Console.WriteLine($"PASS: inactive startup snapshot={original:P0}, external edits, three worker restarts.");
-}
-
-// A session created later gets its own first-observed value, independently of
-// existing sessions, even when it disappears and is subsequently enumerated again.
-MMDeviceEnumerator.Session = new();
-using (var playback = new PlaybackSessions())
-{
-    var first = MMDeviceEnumerator.Session;
-    playback.CaptureSnapshot();
-    var second = new AudioSessionControl { GetSessionInstanceIdentifier = "late-session" };
-    second.SimpleAudioVolume.Volume = 0.65f;
-    MMDeviceEnumerator.Session = second;
-    playback.CaptureSnapshot();
-    second.SimpleAudioVolume.Volume = 0.3f;
-    var settings = new DuckingSettings(90, 0, 0, true);
-    playback.Update(true, settings);
-    playback.RestoreAll(0);
-    Check(second.SimpleAudioVolume.Volume == 0.65f, "A new session lost its first-observed volume.");
-    MMDeviceEnumerator.Session = first;
-    first.SimpleAudioVolume.Volume = 0.4f;
-    playback.Update(true, settings);
-    playback.RestoreAll(0);
-    Check(first.SimpleAudioVolume.Volume == 1f, "Session disappearance discarded the startup snapshot.");
-}
-
-foreach (var muted in new[] { false, true })
-{
-    MMDeviceEnumerator.Session = new();
-    var volume = MMDeviceEnumerator.Session.SimpleAudioVolume;
-    volume.Mute = muted;
-    MMDeviceEnumerator.Session.AudioMeterInformation.MasterPeakValue = muted ? 0.5f : 0;
-    using var playback = new PlaybackSessions();
-    playback.Update(true, new DuckingSettings(95, 0, 15000, true));
-    Check(volume.Writes == 0 && !playback.HasOwnedSessions, "A muted or silent session was changed.");
-}
-
-MMDeviceEnumerator.Session = new();
-using (var playback = new PlaybackSessions())
-{
-    playback.Update(true, new DuckingSettings(95, 0, 15000, true));
-    playback.RestoreAll(0);
-    Check(MMDeviceEnumerator.Session.SimpleAudioVolume.Volume == 1f, "Disable did not restore immediately.");
-}
-Console.WriteLine("PASS: immutable snapshots, new sessions, external edits, muted/silent sessions and immediate Disable restoration.");
-'@ | Set-Content (Join-Path $testRoot 'Program.cs') -Encoding utf8
-
-& dotnet run --project (Join-Path $testRoot 'RestorationTests.csproj') -c Debug `
-    "-p:BaseOutputPath=$testRoot\bin\" "-p:BaseIntermediateOutputPath=$testRoot\obj\" `
-    "-p:MSBuildProjectExtensionsPath=$testRoot\obj\"
-if ($LASTEXITCODE -ne 0) { throw 'Playback restoration regression checks failed.' }
+'@ | Set-Content -LiteralPath (Join-Path $testRoot 'Program.cs') -Encoding utf8
+& dotnet build (Join-Path $testRoot 'RestorationTests.csproj') -c Release -p:ImportDirectoryBuildProps=false --nologo
+if($LASTEXITCODE -ne 0){throw 'Synthetic playback harness build failed.'}
+& dotnet (Join-Path $testRoot 'bin\Release\net10.0\RestorationTests.dll')
+if($LASTEXITCODE -ne 0){throw 'Synthetic playback checks failed.'}

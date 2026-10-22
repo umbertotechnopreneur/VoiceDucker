@@ -10,6 +10,8 @@ namespace VoiceDucker;
 /// </summary>
 internal static class AtomicJsonFile
 {
+    #region Public methods
+
     /// <summary>
     /// Flushes a sibling temporary file before replacing the last saved document.
     /// A failed replacement leaves the previous document intact.
@@ -41,4 +43,6 @@ internal static class AtomicJsonFile
             }
         }
     }
+
+    #endregion
 }

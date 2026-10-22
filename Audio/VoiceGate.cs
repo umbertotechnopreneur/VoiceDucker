@@ -1,192 +1,132 @@
-/* VBWR B
- * Project: VoiceDucker
- * Repository: https://github.com/umbertotechnopreneur/VoiceDucker
- * Creator: Umberto Giacobbi | https://umbertogiacobbi.biz
- * VibeWare initiative: Human intent, AI execution, and plenty of tokens
- * Manifesto: https://umbertogiacobbi.biz/vibeware/manifesto
- * Created with AI: OpenAI Codex assisted the initial implementation; Git history
- * Human guidance: Umberto Giacobbi defined the purpose and audio behavior
- * Evidence: Git history
- * Copyright (c) 2026 Umberto Giacobbi
- * License: MIT
- * VBWR E */
+// VoiceDucker - Copyright (c) 2026 Umberto Giacobbi. MIT license.
 
 namespace VoiceDucker.Audio;
 
-/// <summary>
-/// Turns microphone RMS levels into a signal gate with hysteresis and a release delay.
-/// This detects sound level, not words. The capture callback and worker share its lock.
-/// </summary>
-internal sealed class VoiceGate
+/// <summary>A captured level and monotonic observation time; no audio samples are retained.</summary>
+internal sealed record CapturedMicrophoneSample(double RawRms, long Timestamp, long Sequence);
+
+/// <summary>Explains whether capture is off, active, held, or no longer providing fresh levels.</summary>
+internal enum DetectionPhase
 {
-    private readonly object _sync = new();
-    private double _threshold = 0.018;
-    private int _hysteresisDecibels = 3;
-    private readonly Func<long> _clock;
-    private int _holdMilliseconds = 650;
-    private long _lastLoudTick = -1;
-    private double _latestRms;
+    Off,
+    BelowThreshold,
+    AboveThreshold,
+    Hysteresis,
+    Hold,
+    Stale
+}
+
+/// <summary>The single detection result used by playback control and presentation.</summary>
+internal sealed record GateState(
+    DetectionPhase Phase,
+    bool Speaking,
+    double Rms,
+    double Decibels,
+    double ThresholdDecibels,
+    double ReleaseThresholdDecibels,
+    long SampleAgeMilliseconds)
+{
+    #region Public methods
+
+    /// <summary>Creates an off state while preserving the configured trigger and release thresholds.</summary>
+    public static GateState Off(DuckingSettings settings) => new(
+        DetectionPhase.Off, false, 0, double.NegativeInfinity,
+        settings.ThresholdDecibels,
+        settings.ThresholdDecibels - settings.HysteresisDecibels, 0);
+
+    #endregion
+}
+
+/// <summary>
+/// Evaluates captured levels on the audio worker. Settings, gain, hysteresis and
+/// release timing are applied together; polling never creates a new observation.
+/// </summary>
+internal sealed class VoiceGate(Func<long>? clock = null)
+{
+    #region Constants
+
+    public const int StaleAfterMilliseconds = 1000;
+
+    #endregion
+
+    #region Private fields
+
+    private readonly Func<long> _clock = clock ?? (() => Environment.TickCount64);
+    private CapturedMicrophoneSample? _latestSample;
+    private long? _firstEvaluationTick;
+    private long? _lastLoudTick;
     private bool _signalActive;
 
-    public VoiceGate(Func<long>? clock = null)
-    {
-        _clock = clock ?? (() => Environment.TickCount64);
-    }
+    #endregion
 
-    public double Threshold
-    {
-        get
-        {
-            lock (_sync)
-            {
-                return _threshold;
-            }
-        }
-        set
-        {
-            if (!double.IsFinite(value) || value is < 0.001 or > 1)
-            {
-                throw new ArgumentOutOfRangeException(nameof(value));
-            }
-
-            lock (_sync)
-            {
-                if (_threshold == value)
-                {
-                    return;
-                }
-
-                _threshold = value;
-                EvaluateLevel();
-            }
-        }
-    }
-
-    public int HysteresisDecibels
-    {
-        get
-        {
-            lock (_sync)
-            {
-                return _hysteresisDecibels;
-            }
-        }
-        set
-        {
-            if (value is < 0 or > 12)
-            {
-                throw new ArgumentOutOfRangeException(nameof(value));
-            }
-
-            lock (_sync)
-            {
-                if (_hysteresisDecibels == value)
-                {
-                    return;
-                }
-
-                _hysteresisDecibels = value;
-                EvaluateLevel();
-            }
-        }
-    }
+    #region Public methods
 
     /// <summary>
-    /// Applies live settings together. Unchanged thresholds must not renew the release delay.
+    /// Classifies the newest scalar observation with the current settings and monotonic time.
+    /// A repeated or reordered observation cannot extend hold; stale capture fails inactive.
     /// </summary>
-    public void Configure(DuckingSettings settings)
+    public GateState Evaluate(CapturedMicrophoneSample? sample, DuckingSettings settings)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+
         if (!settings.IsValid)
-        {
             throw new ArgumentOutOfRangeException(nameof(settings));
-        }
 
-        lock (_sync)
+        var now = _clock();
+        _firstEvaluationTick ??= now;
+        if (sample is not null &&
+            (_latestSample is null || sample.Sequence > _latestSample.Sequence))
         {
-            var threshold = settings.GetThresholdAmplitude();
-            var triggerChanged = _threshold != threshold;
-            var hysteresisChanged = _hysteresisDecibels != settings.HysteresisDecibels;
-
-            _threshold = threshold;
-            _hysteresisDecibels = settings.HysteresisDecibels;
-            _holdMilliseconds = settings.RestoreDelayMilliseconds;
-
-            if (triggerChanged || hysteresisChanged)
-            {
-                EvaluateLevel();
-            }
+            _latestSample = sample;
         }
-    }
 
-    public int HoldMilliseconds
-    {
-        get
+        var observedAt = _latestSample?.Timestamp ?? _firstEvaluationTick.Value;
+        var age = Math.Max(0, now - observedAt);
+        var releaseDecibels = settings.ThresholdDecibels - settings.HysteresisDecibels;
+        if (age >= StaleAfterMilliseconds)
         {
-            lock (_sync)
-            {
-                return _holdMilliseconds;
-            }
+            _signalActive = false;
+            _lastLoudTick = null;
+            return new GateState(DetectionPhase.Stale, false, 0, double.NegativeInfinity,
+                settings.ThresholdDecibels, releaseDecibels, age);
         }
-        set
-        {
-            if (value is < 0 or > 10000)
-            {
-                throw new ArgumentOutOfRangeException(nameof(value));
-            }
-            lock (_sync)
-            {
-                _holdMilliseconds = value;
-            }
-        }
-    }
 
-    public void Observe(double rms)
-    {
-        lock (_sync)
-        {
-            _latestRms = double.IsFinite(rms) && rms > 0 ? rms : 0;
-            EvaluateLevel();
-        }
-    }
-
-    /// <summary>
-    /// Reclassifies the last sample while the caller holds _sync.
-    /// Only a new observation or changed thresholds can renew the release delay.
-    /// </summary>
-    private void EvaluateLevel()
-    {
-        var releaseRatio = Math.Pow(10, -_hysteresisDecibels / 20.0);
-        var releaseThreshold = _threshold * releaseRatio;
-        var aboveTrigger = _latestRms >= _threshold;
-        var heldByHysteresis = _signalActive && _latestRms >= releaseThreshold;
-
-        _signalActive = aboveTrigger || heldByHysteresis;
+        var rms = MicrophoneLevel.ApplyGain(_latestSample?.RawRms ?? 0,
+            settings.MicrophoneGainDecibels);
+        var threshold = settings.GetThresholdAmplitude();
+        var releaseThreshold = threshold * Math.Pow(10, -settings.HysteresisDecibels / 20.0);
+        var aboveThreshold = _latestSample is not null && rms >= threshold;
+        var heldByHysteresis = _latestSample is not null && _signalActive && rms >= releaseThreshold;
+        _signalActive = aboveThreshold || heldByHysteresis;
 
         if (_signalActive)
         {
-            _lastLoudTick = _clock();
+            // Reclassifying a sample after a settings edit keeps its original time.
+            // Reading the same sequence on another worker tick cannot renew hold.
+            _lastLoudTick = _lastLoudTick.HasValue
+                ? Math.Max(_lastLoudTick.Value, observedAt) : observedAt;
         }
+
+        var holding = !_signalActive && settings.RestoreDelayMilliseconds > 0 &&
+            _lastLoudTick.HasValue && now - _lastLoudTick.Value < settings.RestoreDelayMilliseconds;
+        var phase = aboveThreshold ? DetectionPhase.AboveThreshold
+            : heldByHysteresis ? DetectionPhase.Hysteresis
+            : holding ? DetectionPhase.Hold
+            : DetectionPhase.BelowThreshold;
+
+        return new GateState(phase, _signalActive || holding, rms,
+            rms > 0 ? 20 * Math.Log10(rms) : double.NegativeInfinity,
+            settings.ThresholdDecibels, releaseDecibels, age);
     }
 
-    public bool IsSpeaking
+    /// <summary>Forgets observations, hysteresis and hold when a capture generation ends.</summary>
+    public void Reset()
     {
-        get
-        {
-            lock (_sync)
-            {
-                if (_signalActive)
-                {
-                    return true;
-                }
-
-                if (_holdMilliseconds <= 0 || _lastLoudTick < 0)
-                {
-                    return false;
-                }
-
-                var elapsedSinceLoudSound = _clock() - _lastLoudTick;
-                return elapsedSinceLoudSound <= _holdMilliseconds;
-            }
-        }
+        _latestSample = null;
+        _firstEvaluationTick = null;
+        _lastLoudTick = null;
+        _signalActive = false;
     }
+
+    #endregion
 }

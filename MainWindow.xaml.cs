@@ -1,70 +1,53 @@
-/* VBWR B
- * Project: VoiceDucker
- * Repository: https://github.com/umbertotechnopreneur/VoiceDucker
- * Manifesto: https://umbertogiacobbi.biz/vibeware/manifesto
- * Creator: Umberto Giacobbi | https://umbertogiacobbi.biz
- * VibeWare initiative: Human intent, AI execution, and plenty of tokens
- * Created with AI: OpenAI Codex assisted the initial implementation; Git history
- * Modified with AI: OpenAI Codex; audio settings, reactive mixer, tray and About, 2026-10-08
- * Human guidance: Umberto Giacobbi defined the purpose and audio behavior
- * Evidence: Git history
- * Copyright (c) 2026 Umberto Giacobbi
- * License: MIT
- * VBWR E */
+// VoiceDucker - Copyright (c) 2026 Umberto Giacobbi. MIT license.
 
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
-using VoiceDucker.Audio;
-using VoiceDucker.Licensing;
+using VoiceDucker.Model;
 using Windows.Foundation;
 using Windows.UI;
 
 namespace VoiceDucker;
 
-/// <summary>
-/// Coordinates the window, engine lifetime and desktop integration.
-/// Settings and playback-row presentation live in the matching partial files.
-/// </summary>
+/// <summary>Displays application state and forwards commands to the application model.</summary>
 public sealed partial class MainWindow : Window
 {
-    private readonly DuckingEngine _engine;
-    private DuckingSettings _settings;
+    #region Private fields
+
+    private readonly VoiceDuckerModel _model;
     private TrayIconService? _tray;
     private AboutWindow? _aboutWindow;
     private CloseChoiceWindow? _closeChoice;
-    private bool _settingsReady;
-    private readonly bool _isWindowsStartup;
     private Expander? _openSettingsExpander;
     private bool _allowClose;
     private bool _micLedActive;
+    private bool _rendering = true;
+    private bool _viewReady;
+    private bool _viewClosed;
+    private bool _trialDialogOpen;
+    private int _renderQueued;
     private readonly Storyboard _micLedPulse = new();
     private readonly Storyboard _mixerPulse = new();
     private readonly Dictionary<string, StreamRow> _streamRows = new(StringComparer.Ordinal);
-    private PlaybackMonitor? _playbackMonitor;
-    private DispatcherTimer? _streamTimer;
-    private bool _refreshingStreamRows;
-    private bool _refreshingMicrophones;
-    private bool _microphoneOperationPending;
-    private bool _microphoneMeterRunning;
-    private bool _microphoneDetectionActive;
-    private double _microphoneMeterRms;
-    private readonly CancellationTokenSource _lifetime = new();
     private readonly WindowPlacementService _windowPlacement;
     private readonly bool _restoredWindowPlacement;
     private readonly DispatcherTimer _footerTimer = new() { Interval = TimeSpan.FromSeconds(30) };
     private readonly Storyboard _footerFade = new();
     private bool _footerPointerOver;
-    private readonly StoreLicenseService _licensing;
-    private readonly DispatcherTimer _licenseTimer = new() { Interval = TimeSpan.FromSeconds(1) };
-    private bool _trialExpiryShown;
 
-    public MainWindow(bool isWindowsStartup = false)
+    #endregion
+
+    #region Initialization
+
+    /// <summary>
+    /// Creates the model and view adapters, restores layout, and subscribes the view to snapshots.
+    /// </summary>
+    public MainWindow()
     {
-        _isWindowsStartup = isWindowsStartup;
         InitializeComponent();
+
         var footerFade = new DoubleAnimation
         {
             From = 1,
@@ -77,48 +60,28 @@ public sealed partial class MainWindow : Window
         _footerFade.Completed += (_, _) => FooterLinks.IsHitTestVisible = false;
         _footerTimer.Tick += FooterTimer_Tick;
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
-
         AddOpacityPulse(_micLedPulse, MicStatusIcon, minimumOpacity: 0.15);
         AddOpacityPulse(_mixerPulse, MixerOnImage, minimumOpacity: 0);
 
-        _settings = SettingsStore.Load(out var settingsError);
-        _engine = new DuckingEngine(_settings);
-        _licensing = new StoreLicenseService(this);
-        _licensing.Changed += OnLicenseChanged;
-        _licenseTimer.Tick += (_, _) => { _licensing.CheckExpiration(); UpdateLicenseTitle(); };
-        ReductionBox.Value = _settings.ReductionPercent;
-        FadeDownBox.Value = _settings.FadeDownMilliseconds;
-        FadeUpBox.Value = _settings.FadeUpMilliseconds;
-        RestoreDelayBox.Value = _settings.RestoreDelayMilliseconds;
-        OtherSourcesCheckBox.IsChecked = _settings.IncludeOtherSources;
-        StartupMicrophoneCheckBox.IsChecked = _settings.EnableMicrophoneOnWindowsStartup;
-        SensitivitySlider.Value = _settings.MicrophoneGainDecibels;
-        UpdateSensitivityLabel();
-        ThresholdSlider.Value = _settings.ThresholdDecibels;
-        HysteresisBox.Value = _settings.HysteresisDecibels;
-        UpdateThresholdDisplay();
-        RefreshHiddenApps();
-        RestoreSettingsSection();
-        _settingsReady = true;
-        FeedbackText.Text = settingsError ?? string.Empty;
-        RefreshMicrophoneChoices();
-
+        _model = new VoiceDuckerModel(this);
         _windowPlacement = new WindowPlacementService(this, () => SettingsSplitView.IsPaneOpen,
-            message => FeedbackText.Text = message);
+            _model.ReportViewError, _model.LoadWindowPlacement, _model.SaveWindowPlacement);
         _restoredWindowPlacement = _windowPlacement.TryRestore(out var settingsPaneOpen);
         SettingsSplitView.IsPaneOpen = settingsPaneOpen;
         SettingsButton.IsChecked = settingsPaneOpen;
         _windowPlacement.SizeChanged += UpdateSettingsPaneWidth;
-
-        StartupCheckBox.IsEnabled = false;
-
-        _engine.StatusChanged += OnStatusChanged;
+        _model.StateChanged += OnModelStateChanged;
         AppWindow.Closing += OnWindowClosing;
         RootPanel.Loaded += OnRootLoaded;
         Closed += OnClosed;
-        _ = RemindWhenMonitoringIsOffAsync();
+        RenderState(_model.Current);
     }
 
+    #endregion
+
+    #region Public methods and events
+
+    /// <summary>Reveals the existing window without replacing its controls or scroll position.</summary>
     internal void ShowForRepeatedLaunch()
     {
         if (_tray is null)
@@ -131,12 +94,17 @@ public sealed partial class MainWindow : Window
         }
 
         ExistingInstanceNotice.IsOpen = true;
-        MainScrollViewer.ChangeView(null, 0, null);
     }
 
+    #endregion
+
+    #region Implementation
+
+    /// <summary>Finishes view setup after layout exists, then asks the model to initialize.</summary>
     private async void OnRootLoaded(object sender, RoutedEventArgs args)
     {
         RootPanel.Loaded -= OnRootLoaded;
+
         if (!_restoredWindowPlacement)
         {
             FitMainWindow(preservePosition: false);
@@ -144,114 +112,233 @@ public sealed partial class MainWindow : Window
 
         UpdateSettingsPaneWidth();
         RevealFooter();
-        if (_licensing.IsStoreEdition)
-        {
-            await UpdateLicenseUiAsync();
-            _ = _licensing.RefreshAsync();
-        }
-        var playbackReady = false;
-        try
-        {
-            _engine.CapturePlaybackSnapshot();
-            _playbackMonitor = new PlaybackMonitor(_engine.VolumeSnapshot, _engine.VolumeEvents);
-            _streamTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
-            _streamTimer.Tick += OnStreamTimerTick;
-            RefreshStreamRows();
-            _streamTimer.Start();
-            playbackReady = true;
-        }
-        catch (Exception exception)
-        {
-            FeedbackText.Text = $"Playback initialization failed: {exception.Message}";
-        }
         _windowPlacement.StartTracking();
+
         try
         {
             var handle = WinRT.Interop.WindowNative.GetWindowHandle(this);
             var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
-            _tray = new TrayIconService(handle, iconPath, () => _engine.IsRunning);
-            _tray.ToggleRequested += () => _ = ToggleDuckingAsync();
+            _tray = new TrayIconService(handle, iconPath, () => _model.Current.Audio.Running);
+            _tray.ToggleRequested += () => _ = _model.ToggleMonitoringAsync();
             _tray.AboutRequested += ShowAbout;
             _tray.ExitRequested += ExitApplication;
-            _tray.Error += exception => FeedbackText.Text = $"Tray error: {exception.Message}";
+            _tray.Error += exception => _model.ReportViewError($"Tray error: {exception.Message}");
         }
         catch (Exception exception)
         {
-            FeedbackText.Text = $"Tray is unavailable: {exception.Message}";
-        }
-        try
-        {
-            await StartupRegistration.InitializeDefaultAsync();
-            StartupCheckBox.IsChecked = await StartupRegistration.IsEnabledAsync();
-        }
-        catch (Exception exception)
-        {
-            FeedbackText.Text = $"Windows startup status could not be read: {exception.Message}";
-        }
-        finally
-        {
-            StartupCheckBox.IsEnabled = true;
-            StartupMicrophoneCheckBox.IsEnabled = StartupCheckBox.IsChecked == true;
+            _model.ReportViewError($"Tray is unavailable: {exception.Message}");
         }
 
-        if (playbackReady && _settings.ShouldEnableMicrophoneOnLaunch(_isWindowsStartup) &&
-            !_engine.IsRunning && !_lifetime.IsCancellationRequested)
+        _viewReady = true;
+
+        try
         {
-            await ToggleDuckingAsync();
+            await _model.InitializeAsync();
+        }
+        catch (Exception exception)
+        {
+            _model.ReportViewError($"Application initialization failed: {exception.Message}");
+        }
+
+        if (!_viewClosed)
+        {
+            RenderState(_model.Current);
         }
     }
 
+    /// <summary>Coalesces notifications into one UI render of the latest available snapshot.</summary>
+    private void OnModelStateChanged(ApplicationState state)
+    {
+        if (_viewClosed || Interlocked.Exchange(ref _renderQueued, 1) != 0)
+        {
+            return;
+        }
+
+        if (!DispatcherQueue.TryEnqueue(() =>
+        {
+            Interlocked.Exchange(ref _renderQueued, 0);
+
+            if (!_viewClosed)
+            {
+                RenderState(_model.Current);
+            }
+        }))
+        {
+            Interlocked.Exchange(ref _renderQueued, 0);
+        }
+    }
+
+    /// <summary>Projects model state onto controls while suppressing commands caused by rendering.</summary>
+    private void RenderState(ApplicationState state)
+    {
+        if (_viewClosed)
+        {
+            return;
+        }
+
+        _rendering = true;
+
+        try
+        {
+            RenderSettings(state);
+            RenderPlaybackRows(state.PlaybackRows);
+            RefreshHiddenApps(state.HiddenProcesses);
+            FeedbackText.Text = state.Feedback;
+            StatusText.Text = state.StatusText;
+            VisualStateText.Text = state.VisualStateText;
+            ToggleButtonLabel.Text = state.Audio.Running ? "Disable" : "Enable";
+            ToggleButtonIcon.Glyph = state.Audio.Running ? "\uE769" : "\uE768";
+            ToggleButton.IsEnabled = state.CanToggle;
+            MicrophoneComboBox.IsEnabled = state.CanSelectMicrophone;
+            MicrophoneNameText.Text = state.MicrophoneNameText;
+            MicrophoneLevelText.Text = state.MicrophoneLevelText;
+            MicrophoneLevelHint.Text = state.MicrophoneLevelHint;
+
+            MicrophoneLevelColumn.Width = new GridLength(state.MicrophoneMeterFraction, GridUnitType.Star);
+            MicrophoneEmptyColumn.Width = new GridLength(1 - state.MicrophoneMeterFraction, GridUnitType.Star);
+            SetMicLedActive(state.Audio.Running);
+            MixerImage.Opacity = state.Audio.Running ? 1 : 0.6;
+
+            var animationLevel = state.AnimationLevel;
+            var mixerScaleFactor = 1 + animationLevel * 0.035;
+            MixerScale.ScaleX = mixerScaleFactor;
+            MixerScale.ScaleY = mixerScaleFactor;
+            MicGlow.Opacity = state.Audio.Speaking ? 0.28 + animationLevel * 0.55 : 0;
+
+            var bars = new[] { Bar1, Bar2, Bar3, Bar4, Bar5 };
+            var weights = new[] { 0.45, 0.75, 1.0, 0.7, 0.4 };
+
+            for (var index = 0; index < bars.Length; index++)
+            {
+                bars[index].Height = 6 + animationLevel * 26 * weights[index];
+                bars[index].Opacity = state.Audio.Running ? 0.5 + animationLevel * 0.5 : 0.25;
+            }
+
+            var license = state.License;
+
+            if (Title != license.WindowTitle)
+            {
+                Title = license.WindowTitle;
+            }
+
+            FooterPurchasePanel.Visibility = license.FooterVisible ? Visibility.Visible : Visibility.Collapsed;
+            FooterTrialText.Text = license.FooterText;
+            LicensePanel.Visibility = license.PanelVisible ? Visibility.Visible : Visibility.Collapsed;
+            LicenseStatusText.Text = license.StatusText;
+            _tray?.SetStatus(state.VisualStateText);
+        }
+        catch (Exception exception)
+        {
+            // Do not synchronously publish another render while reporting a view failure.
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (!_viewClosed)
+                {
+                    _model.ReportViewError($"Window could not be updated: {exception.Message}");
+                }
+            });
+        }
+        finally
+        {
+            _rendering = false;
+        }
+
+        if (_viewReady)
+        {
+            PresentPendingNotices(state);
+        }
+    }
+
+    /// <summary>Displays notices already requested by the model once the view can present them.</summary>
+    private void PresentPendingNotices(ApplicationState state)
+    {
+        if (state.MonitoringReminderPending && _tray is not null)
+        {
+            _model.DismissMonitoringReminder();
+
+            try
+            {
+                _tray.ShowNotification("Monitoring is off",
+                    "VoiceDucker is not monitoring your microphone. Press Enable when you're ready.");
+            }
+            catch (Exception exception)
+            {
+                _model.ReportViewError($"Monitoring reminder could not be shown: {exception.Message}");
+            }
+        }
+
+        if (state.TrialExpiredNoticePending && !_trialDialogOpen)
+        {
+            _ = ShowTrialExpiredNoticeAsync();
+        }
+    }
+
+    /// <summary>Shows the model's pending trial notice and forwards the user's purchase choice.</summary>
+    private async Task ShowTrialExpiredNoticeAsync()
+    {
+        _trialDialogOpen = true;
+        _model.DismissTrialExpiredNotice();
+        RevealFooter();
+
+        try
+        {
+            AppWindow.Show();
+            Activate();
+            var dialog = new ContentDialog
+            {
+                XamlRoot = RootPanel.XamlRoot,
+                Title = "Your free trial has ended",
+                Content = "Thank you for trying VoiceDucker. Your 30-day free trial has ended. Visit Microsoft Store to purchase your copy of the app. You can also visit GitHub to study, copy and adapt the source under its MIT license.",
+                PrimaryButtonText = "Open Microsoft Store",
+                SecondaryButtonText = "View source on GitHub",
+                CloseButtonText = "Close"
+            };
+
+            var result = await dialog.ShowAsync();
+
+            if (result == ContentDialogResult.Primary)
+            {
+                await _model.PurchaseAsync();
+            }
+            else if (result == ContentDialogResult.Secondary)
+            {
+                await Windows.System.Launcher.LaunchUriAsync(new Uri("https://github.com/umbertotechnopreneur/VoiceDucker"));
+            }
+        }
+        catch (Exception)
+        {
+            if (!_viewClosed)
+            {
+                _model.ReportViewError("Your trial has ended. Use Purchase to open Microsoft Store, or visit VoiceDucker on GitHub.");
+            }
+        }
+        finally
+        {
+            _trialDialogOpen = false;
+        }
+    }
+
+    /// <summary>Keeps one settings section expanded and sends its persisted name to the model.</summary>
     private void SettingsExpander_Expanding(Expander sender, ExpanderExpandingEventArgs args)
     {
         if (_openSettingsExpander != sender)
         {
-            if (_openSettingsExpander is not null) _openSettingsExpander.IsExpanded = false;
+            if (_openSettingsExpander is not null)
+            {
+                _openSettingsExpander.IsExpanded = false;
+            }
+
             _openSettingsExpander = sender;
         }
-        if (_settingsReady)
+
+        if (!_rendering)
         {
-            _settings = _settings with
-            {
-                LastSettingsSection = sender == DetectionExpander ? "microphone"
-                    : sender == VolumeExpander ? "volume" : "apps"
-            };
-            ApplyAndSaveSettings();
+            _model.SetSettingsSection(sender == DetectionExpander ? "microphone"
+                : sender == VolumeExpander ? "volume" : "apps");
         }
     }
 
-    private void RestoreSettingsSection()
-    {
-        var section = _settings.LastSettingsSection switch
-        {
-            "microphone" => DetectionExpander,
-            "volume" => VolumeExpander,
-            "apps" => AppsExpander,
-            _ => null
-        };
-        if (section is not null) section.IsExpanded = true;
-    }
-
-    private async Task RemindWhenMonitoringIsOffAsync()
-    {
-        try
-        {
-            await Task.Delay(TimeSpan.FromSeconds(15), _lifetime.Token);
-            if (!_engine.IsRunning)
-            {
-                _tray?.ShowNotification("Monitoring is off",
-                    "VoiceDucker is not monitoring your microphone. Press Enable when you're ready.");
-            }
-        }
-        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
-        {
-            // The application closed before the one-time startup reminder was due.
-        }
-        catch (Exception exception)
-        {
-            FeedbackText.Text = $"Monitoring reminder could not be shown: {exception.Message}";
-        }
-    }
-
+    /// <summary>Opens or closes the settings pane and saves the resulting window layout.</summary>
     private void SettingsButton_Click(object sender, RoutedEventArgs args)
     {
         SettingsSplitView.IsPaneOpen = SettingsButton.IsChecked == true;
@@ -259,6 +346,7 @@ public sealed partial class MainWindow : Window
         _windowPlacement.SaveNow();
     }
 
+    /// <summary>Fits a restored window to its content without resizing a maximized window.</summary>
     private void FitMainWindow(bool preservePosition = true)
     {
         if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Restored })
@@ -266,117 +354,30 @@ public sealed partial class MainWindow : Window
             WindowContentSizing.Fit(this, RootPanel, 520, preservePosition: preservePosition,
                 additionalWidth: SettingsSplitView.IsPaneOpen ? 520 : 0);
         }
+
         UpdateSettingsPaneWidth();
     }
 
+    /// <summary>Converts physical client width into an equal-width settings pane in XAML units.</summary>
     private void UpdateSettingsPaneWidth()
     {
         var scale = Math.Max(0.1, RootPanel.XamlRoot?.RasterizationScale ?? 1);
         SettingsSplitView.OpenPaneLength = AppWindow.ClientSize.Width / scale / 2;
     }
 
+    /// <summary>Forwards the monitoring toggle without implementing capture policy in the view.</summary>
     private async void ToggleButton_Click(object sender, RoutedEventArgs args) =>
-        await ToggleDuckingAsync();
+        await _model.ToggleMonitoringAsync();
 
-    private async Task ToggleDuckingAsync()
-    {
-        if (_microphoneOperationPending) return;
-        SetMicrophoneOperationPending(true);
-        try
-        {
-            if (_engine.IsRunning)
-            {
-                await Task.Run(_engine.Stop);
-            }
-            else
-            {
-                await _licensing.RefreshAsync();
-                if (!_licensing.CanUseApp)
-                {
-                    FeedbackText.Text = "An active Microsoft Store license is required. Check the license or buy VoiceDucker.";
-                    return;
-                }
-                _engine.Start();
-            }
-        }
-        catch (Exception exception)
-        {
-            FeedbackText.Text = $"Microphone operation failed: {exception.Message}";
-        }
-        finally
-        {
-            SetMicrophoneOperationPending(false);
-        }
-    }
+    /// <summary>Asks the model to refresh the Store license.</summary>
+    private async void CheckLicense_Click(object sender, RoutedEventArgs args) =>
+        await _model.RefreshLicenseAsync();
 
+    /// <summary>Forwards the user's explicit purchase request.</summary>
+    private async void Purchase_Click(object sender, RoutedEventArgs args) =>
+        await _model.PurchaseAsync();
 
-    /// <summary>
-    /// Updates capture controls together so overlapping start, stop and input changes cannot race.
-    /// </summary>
-    private void SetMicrophoneOperationPending(bool pending)
-    {
-        _microphoneOperationPending = pending;
-        ToggleButton.IsEnabled = !pending;
-        MicrophoneComboBox.IsEnabled = !pending;
-    }
-
-    /// <summary>
-    /// Marshals worker status to the UI; no microphone or mixer work runs in this callback.
-    /// </summary>
-    private void OnStatusChanged(EngineStatus status)
-    {
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            StatusText.Text = status.Message;
-            ToggleButtonLabel.Text = status.Running ? "Disable" : "Enable";
-            ToggleButtonIcon.Glyph = status.Running ? "\uE769" : "\uE768";
-            SetMicLedActive(status.Running);
-            if (status.Running && !string.IsNullOrWhiteSpace(status.MicrophoneName))
-                MicrophoneNameText.Text = $"Microphone: {status.MicrophoneName}";
-            var rms = status.Running && double.IsFinite(status.MicrophoneRms)
-                ? Math.Clamp(status.MicrophoneRms, 0, 1) : 0;
-            var microphoneDb = rms > 0 ? 20 * Math.Log10(rms) : double.NegativeInfinity;
-            var meterFraction = Math.Clamp((microphoneDb + 60) / 60, 0, 1);
-            MicrophoneLevelColumn.Width = new GridLength(meterFraction, GridUnitType.Star);
-            MicrophoneEmptyColumn.Width = new GridLength(1 - meterFraction, GridUnitType.Star);
-            _microphoneMeterRunning = status.Running;
-            _microphoneDetectionActive = status.Speaking;
-            _microphoneMeterRms = rms;
-            UpdateMicrophoneThresholdHint();
-            MicrophoneLevelText.Text = !status.Running ? "Off" : rms <= 0 ? "−∞ dBFS" : $"{microphoneDb:0.0} dBFS";
-
-            VisualStateText.Text = !status.Running ? "MIC OFF" :
-                status.Speaking && status.AffectedSessions > 0 ? "AUDIO LOWERING" :
-                status.Speaking ? "VOICE DETECTED" : "LISTENING";
-            try
-            {
-                _tray?.SetStatus(VisualStateText.Text);
-            }
-            catch (Exception exception)
-            {
-                FeedbackText.Text = $"Tray status could not be updated: {exception.Message}";
-            }
-            MixerImage.Opacity = status.Running ? 1 : 0.6;
-            var level = status.Running ? status.MicrophoneLevel : 0;
-            var scale = 1 + level * 0.035;
-            MixerScale.ScaleX = scale;
-            MixerScale.ScaleY = scale;
-            MicGlow.Opacity = status.Speaking ? 0.28 + level * 0.55 : 0;
-
-            var bars = new[] { Bar1, Bar2, Bar3, Bar4, Bar5 };
-            var weights = new[] { 0.45, 0.75, 1.0, 0.7, 0.4 };
-            for (var index = 0; index < bars.Length; index++)
-            {
-                bars[index].Height = 6 + level * 26 * weights[index];
-                bars[index].Opacity = status.Running ? 0.5 + level * 0.5 : 0.25;
-            }
-        });
-    }
-
-
-    /// <summary>
-    /// Gives both microphone illustrations the same repeating opacity timing.
-    /// </summary>
+    /// <summary>Adds a repeating opacity animation to a presentation-only indicator.</summary>
     private static void AddOpacityPulse(Storyboard storyboard, DependencyObject target, double minimumOpacity)
     {
         var animation = new DoubleAnimation
@@ -388,12 +389,12 @@ public sealed partial class MainWindow : Window
             RepeatBehavior = RepeatBehavior.Forever,
             EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
         };
-
         Storyboard.SetTarget(animation, target);
         Storyboard.SetTargetProperty(animation, "Opacity");
         storyboard.Children.Add(animation);
     }
 
+    /// <summary>Changes microphone artwork and pulses only when its displayed on/off state changes.</summary>
     private void SetMicLedActive(bool active)
     {
         if (_micLedActive == active)
@@ -403,52 +404,24 @@ public sealed partial class MainWindow : Window
 
         _micLedActive = active;
         MicStatusBorder.Background = new SolidColorBrush(active
-            ? Color.FromArgb(255, 6, 5, 7)
-            : Color.FromArgb(255, 38, 59, 80));
+            ? Color.FromArgb(255, 6, 5, 7) : Color.FromArgb(255, 38, 59, 80));
         MicStatusBorder.BorderBrush = new SolidColorBrush(active
-            ? Color.FromArgb(255, 116, 29, 39)
-            : Color.FromArgb(255, 246, 162, 76));
-        if (active)
-        {
-            var gradient = new LinearGradientBrush
-            {
-                StartPoint = new Point(0, 0),
-                EndPoint = new Point(1, 1)
-            };
-            gradient.GradientStops.Add(new GradientStop
-            {
-                Color = Color.FromArgb(255, 126, 24, 34),
-                Offset = 0
-            });
-            gradient.GradientStops.Add(new GradientStop
-            {
-                Color = Color.FromArgb(255, 247, 112, 106),
-                Offset = 0.39
-            });
-            gradient.GradientStops.Add(new GradientStop
-            {
-                Color = Color.FromArgb(255, 168, 38, 45),
-                Offset = 0.71
-            });
-            gradient.GradientStops.Add(new GradientStop
-            {
-                Color = Color.FromArgb(255, 74, 14, 23),
-                Offset = 1
-            });
-            MicStatusIcon.Foreground = gradient;
-        }
-        else
-        {
-            MicStatusIcon.Foreground = new SolidColorBrush(Color.FromArgb(255, 246, 162, 76));
-        }
+            ? Color.FromArgb(255, 116, 29, 39) : Color.FromArgb(255, 246, 162, 76));
 
         if (active)
         {
+            var gradient = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
+            gradient.GradientStops.Add(new GradientStop { Color = Color.FromArgb(255, 126, 24, 34), Offset = 0 });
+            gradient.GradientStops.Add(new GradientStop { Color = Color.FromArgb(255, 247, 112, 106), Offset = 0.39 });
+            gradient.GradientStops.Add(new GradientStop { Color = Color.FromArgb(255, 168, 38, 45), Offset = 0.71 });
+            gradient.GradientStops.Add(new GradientStop { Color = Color.FromArgb(255, 74, 14, 23), Offset = 1 });
+            MicStatusIcon.Foreground = gradient;
             _micLedPulse.Begin();
             _mixerPulse.Begin();
         }
         else
         {
+            MicStatusIcon.Foreground = new SolidColorBrush(Color.FromArgb(255, 246, 162, 76));
             _micLedPulse.Stop();
             _mixerPulse.Stop();
             MicStatusIcon.Opacity = 1;
@@ -456,6 +429,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>Reveals footer links in their reserved layout space and restarts their visible interval.</summary>
     private void RevealFooter()
     {
         _footerFade.Stop();
@@ -465,80 +439,14 @@ public sealed partial class MainWindow : Window
         _footerTimer.Start();
     }
 
-    private void OnLicenseChanged() => DispatcherQueue.TryEnqueue(() =>
-    {
-        if (!_lifetime.IsCancellationRequested) _ = UpdateLicenseUiAsync();
-    });
-
-    private async Task UpdateLicenseUiAsync()
-    {
-        if (_lifetime.IsCancellationRequested) return;
-        if (_licensing.State == LicenseState.Trial) _licenseTimer.Start();
-        else _licenseTimer.Stop();
-        UpdateLicenseTitle();
-        FooterPurchasePanel.Visibility = _licensing.IsStoreEdition && _licensing.State != LicenseState.Full
-            ? Visibility.Visible : Visibility.Collapsed;
-        FooterTrialText.Text = _licensing.State == LicenseState.Trial ? "You're using the trial version"
-            : _licensing.State == LicenseState.Expired ? "Trial expired" : "Microsoft Store edition";
-        LicensePanel.Visibility = _licensing.IsStoreEdition && _licensing.State is LicenseState.Checking or LicenseState.Unavailable
-            ? Visibility.Visible : Visibility.Collapsed;
-        LicenseStatusText.Text = _licensing.State switch
-        {
-            LicenseState.Trial => $"Free trial — {Math.Max(1, (int)Math.Ceiling((_licensing.Expires - DateTimeOffset.UtcNow).TotalDays))} days remaining. Ends {_licensing.Expires.LocalDateTime:d}. Purchase is optional; no automatic charge.",
-            LicenseState.Expired => "Your trial or license has ended. Buy VoiceDucker to keep using it.",
-            LicenseState.Checking => "Checking your Microsoft Store license…",
-            LicenseState.Unavailable => "Your Microsoft Store license could not be checked. Please retry.",
-            _ => string.Empty
-        };
-        if (!_licensing.CanUseApp && _engine.IsRunning)
-        {
-            try { await Task.Run(_engine.Stop); }
-            catch (Exception exception) { FeedbackText.Text = $"Audio restoration failed: {exception.Message}"; }
-        }
-        if (_lifetime.IsCancellationRequested) return;
-        if (RootPanel.IsLoaded)
-            FitMainWindow();
-        if (_licensing.State == LicenseState.Expired && _licensing.IsTrialLicense && !_trialExpiryShown)
-        {
-            _trialExpiryShown = true;
-            RevealFooter();
-            try
-            {
-                AppWindow.Show();
-                Activate();
-                var dialog = new ContentDialog
-                {
-                    XamlRoot = RootPanel.XamlRoot,
-                    Title = "Your free trial has ended",
-                    Content = "Thank you for trying VoiceDucker. Your 30-day free trial has ended. Visit Microsoft Store to purchase your copy of the app. You can also visit GitHub to study, copy and adapt the source under its MIT license.",
-                    PrimaryButtonText = "Open Microsoft Store",
-                    SecondaryButtonText = "View source on GitHub",
-                    CloseButtonText = "Close"
-                };
-                var result = await dialog.ShowAsync();
-                if (result == ContentDialogResult.Primary)
-                    await Windows.System.Launcher.LaunchUriAsync(new Uri($"ms-windows-store://pdp/?productid={StoreLicenseService.StoreId}"));
-                else if (result == ContentDialogResult.Secondary)
-                    await Windows.System.Launcher.LaunchUriAsync(new Uri("https://github.com/umbertotechnopreneur/VoiceDucker"));
-            }
-            catch (Exception) { FeedbackText.Text = "Your trial has ended. Use Purchase to open Microsoft Store, or visit VoiceDucker on GitHub."; }
-        }
-    }
-
-    private void UpdateLicenseTitle()
-    {
-        var title = LicensePolicy.WindowTitle("VoiceDucker", _licensing.State, _licensing.Expires, DateTimeOffset.UtcNow);
-        if (Title != title) Title = title;
-    }
-
-    private async void CheckLicense_Click(object sender, RoutedEventArgs args) => await _licensing.RefreshAsync();
-
+    /// <summary>Keeps footer links visible while the pointer is over them.</summary>
     private void Footer_PointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs args)
     {
         _footerPointerOver = true;
         RevealFooter();
     }
 
+    /// <summary>Starts a new footer visibility interval after pointer interaction ends.</summary>
     private void Footer_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs args)
     {
         _footerPointerOver = false;
@@ -546,27 +454,37 @@ public sealed partial class MainWindow : Window
         _footerTimer.Start();
     }
 
+    /// <summary>Reveals footer links when keyboard navigation reaches them.</summary>
     private void Footer_GotFocus(object sender, RoutedEventArgs args) => RevealFooter();
 
+    /// <summary>Fades the footer only when neither keyboard focus nor the pointer is inside it.</summary>
     private void FooterTimer_Tick(object? sender, object args)
     {
-        // Keep links visible while the user is interacting with them, including by keyboard.
-        var focusedElement = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(RootPanel.XamlRoot) as DependencyObject;
-        while (focusedElement is not null)
+        var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(RootPanel.XamlRoot) as DependencyObject;
+
+        while (focused is not null)
         {
-            if (focusedElement == FooterLinks)
+            if (focused == FooterLinks)
+            {
                 return;
-            focusedElement = VisualTreeHelper.GetParent(focusedElement);
+            }
+
+            focused = VisualTreeHelper.GetParent(focused);
         }
+
         if (_footerPointerOver)
+        {
             return;
+        }
+
         _footerTimer.Stop();
         _footerFade.Begin();
-        // Preserve the footer's layout space so the interface does not jump after fading.
     }
 
+    /// <summary>Opens the About window from the main footer.</summary>
     private void AboutButton_Click(object sender, RoutedEventArgs args) => ShowAbout();
 
+    /// <summary>Activates the existing About window or creates one when none is open.</summary>
     private void ShowAbout()
     {
         if (_aboutWindow is not null)
@@ -574,19 +492,24 @@ public sealed partial class MainWindow : Window
             _aboutWindow.Activate();
             return;
         }
+
         _aboutWindow = new AboutWindow();
         _aboutWindow.Closed += (_, _) => _aboutWindow = null;
         _aboutWindow.Activate();
     }
 
+    /// <summary>Intercepts the native close request until the user chooses tray mode or exit.</summary>
     private void OnWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
         _windowPlacement.SaveNow();
+
         if (_allowClose)
         {
             return;
         }
+
         args.Cancel = true;
+
         if (_closeChoice is not null)
         {
             _closeChoice.Activate();
@@ -600,6 +523,7 @@ public sealed partial class MainWindow : Window
         _closeChoice.Activate();
     }
 
+    /// <summary>Hides the window through the tray adapter while leaving model state unchanged.</summary>
     private void MinimizeToTray()
     {
         try
@@ -608,17 +532,19 @@ public sealed partial class MainWindow : Window
             {
                 throw new InvalidOperationException("The tray icon is unavailable.");
             }
+
             _aboutWindow?.Close();
             _windowPlacement.SaveNow();
             _tray.HideWindow();
         }
         catch (Exception exception)
         {
-            FeedbackText.Text = $"Could not minimize to tray: {exception.Message}";
+            _model.ReportViewError($"Could not minimize to tray: {exception.Message}");
             _tray?.ShowWindow();
         }
     }
 
+    /// <summary>Saves layout and permits the close request that begins application shutdown.</summary>
     private void ExitApplication()
     {
         _windowPlacement.SaveNow();
@@ -626,41 +552,48 @@ public sealed partial class MainWindow : Window
         Close();
     }
 
-    private void OnStreamTimerTick(object? sender, object args) => RefreshStreamRows();
-
+    /// <summary>Unsubscribes the closed view and releases every adapter even if earlier cleanup fails.</summary>
     private void OnClosed(object sender, WindowEventArgs args)
     {
-        void Release(string resource, Action cleanup)
-        {
-            try { cleanup(); }
-            catch (Exception exception)
-            {
-                AudioDiagnostics.Write(() => $"shutdown-failed resource={resource} error={exception.Message}");
-            }
-        }
-
+        _viewClosed = true;
+        _model.StateChanged -= OnModelStateChanged;
         _windowPlacement.SizeChanged -= UpdateSettingsPaneWidth;
-        Release("window-placement", _windowPlacement.Dispose);
-        Release("pending-ui-work", _lifetime.Cancel);
-        _licenseTimer.Stop();
-        _licensing.Changed -= OnLicenseChanged;
-        Release("store-license", _licensing.Dispose);
         _footerTimer.Stop();
+        _footerTimer.Tick -= FooterTimer_Tick;
         _footerFade.Stop();
         _micLedPulse.Stop();
         _mixerPulse.Stop();
-        _streamTimer?.Stop();
-        if (_streamTimer is not null) _streamTimer.Tick -= OnStreamTimerTick;
-        _streamTimer = null;
-        Release("volume-notifications", () => _playbackMonitor?.Dispose());
-        _playbackMonitor = null;
-        _engine.StatusChanged -= OnStatusChanged;
         AppWindow.Closing -= OnWindowClosing;
-        Release("tray", () => _tray?.Dispose());
-        Release("about-window", () => _aboutWindow?.Close());
-        Release("close-choice", () => _closeChoice?.Close());
-        Release("audio-worker", _engine.Dispose);
-        Release("ui-lifetime", _lifetime.Dispose);
-        AudioDiagnostics.Write(() => "application-shutdown cleanup=finished");
+        try
+        {
+            _windowPlacement.Dispose();
+        }
+        finally
+        {
+            try
+            {
+                _tray?.Dispose();
+            }
+            finally
+            {
+                try
+                {
+                    _aboutWindow?.Close();
+                }
+                finally
+                {
+                    try
+                    {
+                        _closeChoice?.Close();
+                    }
+                    finally
+                    {
+                        _model.Dispose();
+                    }
+                }
+            }
+        }
     }
+
+    #endregion
 }

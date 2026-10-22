@@ -1,5 +1,9 @@
 # VoiceDucker
 
+[![Windows build status](https://github.com/umbertotechnopreneur/VoiceDucker/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/umbertotechnopreneur/VoiceDucker/actions/workflows/build.yml)
+![Platform: Windows 11](https://img.shields.io/badge/platform-Windows_11-0078D4)
+[![License: MIT](https://img.shields.io/badge/license-MIT-2EA44F)](LICENSE)
+
 **You talk. Music turns down. You stop. It comes back.**
 
 I built VoiceDucker to talk to AI while Spotify keeps playing.
@@ -61,7 +65,7 @@ See the [release notes](docs/releases/0.2.0.md) for details.
 4. Speak. The music gets quieter. Pause, and it slowly comes back.
 
 Press **Disable** to stop. The microphone starts **off** unless you explicitly
-enable automatic monitoring for Windows startup.
+turn on **Enable microphone on startup**.
 The ZIP needs no installer; it is unsigned, so Windows may show a security prompt.
 
 ## Choose which apps get quieter
@@ -92,10 +96,11 @@ MSIX updates keep these preferences. Uninstalling the MSIX removes its private
 settings, so install a newer package over the existing one to keep them.
 
 Under **Apps & startup**, **Start with Windows** controls automatic launch.
-The separate **Enable microphone** checkbox also starts monitoring at Windows
-login. It is off by default and available when Windows startup is enabled.
-Changing it does not start the microphone immediately. Opening VoiceDucker
-manually keeps the microphone off.
+The independent **Enable microphone on startup** checkbox starts monitoring
+whenever VoiceDucker opens, including manual launches. It is off by default and
+does not require **Start with Windows**. Changing it applies to the next launch;
+it does not start the microphone immediately. Monitoring starts only after the
+playback volume snapshot and normal license checks.
 
 ## Good to know
 
@@ -107,13 +112,35 @@ Windows playback; your recording's sound depends on its audio sources.
 
 Opening VoiceDucker again shows the existing window, not a second copy.
 
-At launch, VoiceDucker remembers each app audio session's volume in memory.
-Every reduction and restoration uses that same baseline until VoiceDucker exits,
-including after Disable/Enable or a mixer change. Sessions created later are
-remembered when first detected. Muted and silent playback is left alone.
+Each slider shows the app's **current playback volume** and moves with automatic
+lowering and restoration. **Normal** shows the level to return to when sound
+detection ends. With normal volume at 36% and reduction at 50%, the slider falls
+to 18% during voice and returns to 36% in silence.
+Moving the slider changes the current volume and adjusts the normal level to
+keep the selected reduction: setting 20% during a 50% reduction sets Normal to
+40%. While lowering by 50%, current volume is limited to 50%; with a 100%
+reduction it is held at zero and the slider is temporarily unavailable.
+
+At launch, VoiceDucker also remembers a separate safety restoration level for
+each session. Disable and exit restore sessions changed by the app to that level.
+Sessions created later are remembered when first detected. These safety levels
+never change during the app's lifetime. New automatic reductions ignore muted
+and silent playback; pending restoration of muted or unavailable sessions is
+reported and retried when the session becomes accessible.
 Windows volume and mute notifications are monitored even while the microphone
 is off. VoiceDucker recognizes its own mixer writes separately from external
-changes; external changes do not replace the startup baseline.
+changes; manual and external changes do not replace the startup baseline.
+The orange signal meter sits directly below the volume slider with matching track
+width. It applies the actual session volume to Windows' pre-volume signal reading,
+so automatic lowering is reflected in the displayed level. System master volume
+and speaker processing are not included. Its scale is in decibels, so its filled
+length is not a volume percentage.
+Detection threshold controls when lowering starts; **Reduce volume by** controls
+how far the volume is lowered. Moving the threshold farther below an already
+detected microphone level does not increase the amount of lowering.
+The app reports lowering only after observing an actual
+automatic volume reduction. An unchanged volume is never written again just
+because another monitoring tick occurred.
 
 <img src="docs/screenshots/main-window.png" alt="VoiceDucker with the microphone off" width="480">
 
@@ -136,13 +163,6 @@ I keep a record of where each new import came from and the scan result. If a sca
 
 ---
 
-<p align="right">
-  <a href="https://umbertogiacobbi.biz/vibeware/manifesto">
-    <img src="https://raw.githubusercontent.com/umbertotechnopreneur/VibeWare/main/Branding/vibeware-logo.png" alt="VibeWare floppy logo" width="160">
-  </a><br>
-  <em>Human Intent, AI Execution, Plenty of Token</em>
-</p>
-
 ### This is VibeWare · [Manifesto](https://umbertogiacobbi.biz/vibeware/manifesto)
 
 I created VoiceDucker with AI assistance. I define its purpose, guide the implementation, and take responsibility for checking functionality, performance, and security. VibeWare is my initiative for building useful software openly with AI; I ask you to judge the result and the evidence behind it.
@@ -151,6 +171,13 @@ To learn what VibeWare means and why I created it, read the [VibeWare manifesto]
 
 [VoiceDucker on GitHub](https://github.com/umbertotechnopreneur/VoiceDucker) · [VibeWare on GitHub](https://github.com/umbertotechnopreneur/VibeWare) · [umbertogiacobbi.biz](https://umbertogiacobbi.biz)
 
+*You are welcome to explore, adapt and reuse the open-source VibeWare materials under the project license — my contribution to the developer community.*
+
 [Terms](https://umbertogiacobbi.biz/terms/) · [Privacy](https://umbertogiacobbi.biz/privacy/)
 
-*You are welcome to explore, adapt and reuse the open-source VibeWare materials under the project license — my contribution to the developer community.*
+<p align="right">
+  <a href="https://umbertogiacobbi.biz/vibeware/manifesto">
+    <img src="https://raw.githubusercontent.com/umbertotechnopreneur/VibeWare/main/Branding/vibeware-logo.png" alt="VibeWare floppy logo" width="160">
+  </a><br>
+  <em>Human Intent, AI Execution, Plenty of Token</em>
+</p>
