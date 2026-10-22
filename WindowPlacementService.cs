@@ -14,18 +14,33 @@ namespace VoiceDucker;
 /// </summary>
 internal sealed class WindowPlacementService : IDisposable
 {
+    #region Private fields
+
     private readonly AppWindow _window;
     private readonly IntPtr _handle;
     private readonly Func<bool> _isSettingsPaneOpen;
     private readonly Action<string> _reportError;
     private readonly Func<WindowPlacementState?> _load;
     private readonly Action<WindowPlacementState> _save;
+
     private readonly DispatcherTimer _saveTimer = new() { Interval = TimeSpan.FromMilliseconds(500) };
+
     private WindowPlacementState? _state;
+
+    #endregion
+
+    #region Public state and events
 
     public bool IsTracking { get; private set; }
     public event Action? SizeChanged;
 
+    #endregion
+
+    #region Initialization
+
+    /// <summary>
+    /// Connects window geometry and persistence adapters without starting change tracking.
+    /// </summary>
     public WindowPlacementService(Window window, Func<bool> isSettingsPaneOpen, Action<string> reportError,
         Func<WindowPlacementState?> load, Action<WindowPlacementState> save)
     {
@@ -38,13 +53,23 @@ internal sealed class WindowPlacementService : IDisposable
         _saveTimer.Tick += OnSaveTimer;
     }
 
+    #endregion
+
+    #region Public methods
+
+    /// <summary>
+    /// Selects the saved display when available and restores bounds using that display’s current DPI.
+    /// </summary>
     public bool TryRestore(out bool settingsPaneOpen)
     {
         settingsPaneOpen = false;
         try
         {
             _state = _load();
-            if (_state is null) return false;
+            if (_state is null)
+            {
+                return false;
+            }
 
             var monitors = GetMonitors();
             var monitor = monitors.FirstOrDefault(item => !string.IsNullOrEmpty(_state.MonitorId)
@@ -59,7 +84,10 @@ internal sealed class WindowPlacementService : IDisposable
                 Math.Min(_window.Size.Height, monitor.WorkArea.Height)));
             var bounds = _state.RestoreBounds(monitor.WorkArea, GetDpi());
             _window.MoveAndResize(new RectInt32(bounds.X, bounds.Y, bounds.Width, bounds.Height));
-            if (_state.Maximized && _window.Presenter is OverlappedPresenter presenter) presenter.Maximize();
+            if (_state.Maximized && _window.Presenter is OverlappedPresenter presenter)
+            {
+                presenter.Maximize();
+            }
             settingsPaneOpen = _state.SettingsPaneOpen;
             return true;
         }
@@ -71,6 +99,9 @@ internal sealed class WindowPlacementService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Subscribes to geometry changes and captures the initial placement.
+    /// </summary>
     public void StartTracking()
     {
         IsTracking = true;
@@ -78,13 +109,19 @@ internal sealed class WindowPlacementService : IDisposable
         SaveNow();
     }
 
+    /// <summary>
+    /// Cancels the debounce delay and immediately captures and saves usable bounds.
+    /// </summary>
     public void SaveNow()
     {
         _saveTimer.Stop();
         try
         {
             Capture();
-            if (_state is not null) _save(_state);
+            if (_state is not null)
+            {
+                _save(_state);
+            }
         }
         catch (Exception exception)
         {
@@ -92,10 +129,23 @@ internal sealed class WindowPlacementService : IDisposable
         }
     }
 
+    #endregion
+
+    #region Implementation
+
+    /// <summary>
+    /// Captures geometry while the native handle is valid and restarts the delayed save.
+    /// </summary>
     private void OnWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
     {
-        if (args.DidSizeChange) SizeChanged?.Invoke();
-        if (!args.DidSizeChange && !args.DidPositionChange && !args.DidPresenterChange) return;
+        if (args.DidSizeChange)
+        {
+            SizeChanged?.Invoke();
+        }
+        if (!args.DidSizeChange && !args.DidPositionChange && !args.DidPresenterChange)
+        {
+            return;
+        }
         try
         {
             // Capture while the HWND is valid; Closed can arrive after it is destroyed.
@@ -116,7 +166,10 @@ internal sealed class WindowPlacementService : IDisposable
     private void Capture()
     {
         if (_window.Presenter is not OverlappedPresenter presenter ||
-            presenter.State == OverlappedPresenterState.Minimized) return;
+            presenter.State == OverlappedPresenterState.Minimized)
+        {
+            return;
+        }
 
         var monitor = ReadMonitor(MonitorFromWindow(_handle, 2)); // MONITOR_DEFAULTTONEAREST
         var dpi = GetDpi();
@@ -124,28 +177,43 @@ internal sealed class WindowPlacementService : IDisposable
         var bounds = maximized
             ? _state?.RestoreBounds(monitor.WorkArea, dpi)
             : new WindowBounds(_window.Position.X, _window.Position.Y, _window.Size.Width, _window.Size.Height);
-        if (bounds is null) return;
+        if (bounds is null)
+        {
+            return;
+        }
         _state = new WindowPlacementState(bounds, monitor.WorkArea, dpi, monitor.Id, monitor.Name,
             maximized, _isSettingsPaneOpen());
     }
 
+    /// <summary>
+    /// Reads the current window DPI, falling back to standard Windows scaling if unavailable.
+    /// </summary>
     private uint GetDpi()
     {
         var dpi = GetDpiForWindow(_handle);
         return dpi == 0 ? 96 : dpi;
     }
 
+    /// <summary>
+    /// Ends the debounce interval and persists the latest captured placement.
+    /// </summary>
     private void OnSaveTimer(object? sender, object args)
     {
         _saveTimer.Stop();
         Persist();
     }
 
+    /// <summary>
+    /// Saves the latest valid placement and sends storage failures to the application model.
+    /// </summary>
     private void Persist()
     {
         try
         {
-            if (_state is not null) _save(_state);
+            if (_state is not null)
+            {
+                _save(_state);
+            }
         }
         catch (Exception exception)
         {
@@ -153,6 +221,13 @@ internal sealed class WindowPlacementService : IDisposable
         }
     }
 
+    #endregion
+
+    #region Public methods
+
+    /// <summary>
+    /// Stops delayed saves, detaches geometry handlers and persists the final captured placement.
+    /// </summary>
     public void Dispose()
     {
         _saveTimer.Stop();
@@ -162,8 +237,22 @@ internal sealed class WindowPlacementService : IDisposable
         Persist();
     }
 
+    #endregion
+
+    #region Native interop
+
+    /// <summary>
+    /// Keeps stable display identity alongside its current work area and primary-display flag.
+    /// </summary>
     private sealed record MonitorInfo(string Id, string Name, WindowBounds WorkArea, bool IsPrimary);
 
+    #endregion
+
+    #region Implementation
+
+    /// <summary>
+    /// Enumerates monitor handles and resolves each one to display identity and work-area information.
+    /// </summary>
     private static List<MonitorInfo> GetMonitors()
     {
         var handles = new List<IntPtr>();
@@ -173,14 +262,23 @@ internal sealed class WindowPlacementService : IDisposable
             return true;
         };
         if (!EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, callback, IntPtr.Zero))
+        {
             throw new Win32Exception(Marshal.GetLastWin32Error());
+        }
+
         return handles.Select(ReadMonitor).ToList();
     }
 
+    /// <summary>
+    /// Reads stable monitor identity and physical work-area bounds from Windows.
+    /// </summary>
     private static MonitorInfo ReadMonitor(IntPtr handle)
     {
         var info = new NativeMonitorInfo { Size = Marshal.SizeOf<NativeMonitorInfo>() };
-        if (!GetMonitorInfo(handle, ref info)) throw new Win32Exception(Marshal.GetLastWin32Error());
+        if (!GetMonitorInfo(handle, ref info))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        }
         var device = new DisplayDevice { Size = Marshal.SizeOf<DisplayDevice>() };
         // The interface ID identifies the monitor even if Windows renumbers DISPLAY1/2.
         var id = EnumDisplayDevices(info.DeviceName, 0, ref device, 1) ? device.DeviceId : string.Empty;
@@ -190,9 +288,25 @@ internal sealed class WindowPlacementService : IDisposable
             (info.Flags & 1) != 0);
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct NativeRect { public int Left, Top, Right, Bottom; }
+    #endregion
 
+    #region Native interop
+
+    /// <summary>
+    /// Matches a native rectangle in physical desktop coordinates.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    /// <summary>
+    /// Carries monitor bounds, work area and display device name from Windows.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct NativeMonitorInfo
     {
@@ -202,6 +316,9 @@ internal sealed class WindowPlacementService : IDisposable
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string DeviceName;
     }
 
+    /// <summary>
+    /// Carries display interface identifiers supplied by Windows display enumeration.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct DisplayDevice
     {
@@ -213,23 +330,43 @@ internal sealed class WindowPlacementService : IDisposable
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string RegistryKey;
     }
 
+    /// <summary>
+    /// Receives one monitor from native display enumeration while the callback remains rooted.
+    /// </summary>
     private delegate bool MonitorEnumProc(IntPtr monitor, IntPtr dc, ref NativeRect bounds, IntPtr data);
 
+    /// <summary>
+    /// Enumerates attached monitors through the supplied callback.
+    /// </summary>
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool EnumDisplayMonitors(IntPtr dc, IntPtr clip, MonitorEnumProc callback, IntPtr data);
 
+    /// <summary>
+    /// Reads the selected monitor’s device name and work area.
+    /// </summary>
     [DllImport("user32.dll", EntryPoint = "GetMonitorInfoW", CharSet = CharSet.Unicode, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetMonitorInfo(IntPtr monitor, ref NativeMonitorInfo info);
 
+    /// <summary>
+    /// Reads the stable display interface identifier used to match saved monitors.
+    /// </summary>
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool EnumDisplayDevices(string device, uint index, ref DisplayDevice info, uint flags);
 
+    /// <summary>
+    /// Finds the display containing or nearest to the main window.
+    /// </summary>
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromWindow(IntPtr window, uint flags);
 
+    /// <summary>
+    /// Reads the scaling applied by Windows to the current native window.
+    /// </summary>
     [DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr window);
+
+    #endregion
 }

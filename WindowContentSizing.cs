@@ -20,8 +20,16 @@ using Windows.Graphics;
 
 namespace VoiceDucker;
 
+/// <summary>
+/// Measures XAML content, sizes its native window and positions it within the owner display.
+/// </summary>
 internal static class WindowContentSizing
 {
+    #region Public methods
+
+    /// <summary>
+    /// Measures the content at the display scale, resizes the client area and centers or preserves the window position.
+    /// </summary>
     public static void Fit(Window window, FrameworkElement content, double preferredWidth,
         AppWindow? owner = null, bool preservePosition = false, double additionalWidth = 0)
     {
@@ -31,8 +39,9 @@ internal static class WindowContentSizing
         var workArea = DisplayArea.GetFromWindowId(owner?.Id ?? window.AppWindow.Id,
             DisplayAreaFallback.Primary).WorkArea;
         var edge = (int)Math.Ceiling(20 * scale);
-        var clientWidth = Math.Max(1, Math.Min(
-            (int)Math.Ceiling((preferredWidth + additionalWidth) * scale), workArea.Width - 2 * edge));
+        var requestedClientWidth = (int)Math.Ceiling((preferredWidth + additionalWidth) * scale);
+        var availableClientWidth = workArea.Width - 2 * edge;
+        var clientWidth = Math.Max(1, Math.Min(requestedClientWidth, availableClientWidth));
 
         // Reserve space for a vertical scrollbar if the display cannot fit all content.
         var contentWidth = clientWidth / scale * preferredWidth / (preferredWidth + additionalWidth);
@@ -40,19 +49,37 @@ internal static class WindowContentSizing
         var desiredHeight = (int)Math.Ceiling((content.DesiredSize.Height + 8) * scale);
         var chromeHeight = Math.Max(0, window.AppWindow.Size.Height - window.AppWindow.ClientSize.Height);
         var maxClientHeight = Math.Max(1, workArea.Height - 2 * edge - chromeHeight);
-        window.AppWindow.ResizeClient(new SizeInt32(clientWidth, Math.Min(desiredHeight, maxClientHeight)));
+        var clientHeight = Math.Min(desiredHeight, maxClientHeight);
+
+        window.AppWindow.ResizeClient(new SizeInt32(clientWidth, clientHeight));
 
         var bounds = window.AppWindow.Size;
-        var preferredX = preservePosition ? window.AppWindow.Position.X : owner is null
-            ? workArea.X + (workArea.Width - bounds.Width) / 2
-            : owner.Position.X + (owner.Size.Width - bounds.Width) / 2;
-        var preferredY = preservePosition ? window.AppWindow.Position.Y : owner is null
-            ? workArea.Y + (workArea.Height - bounds.Height) / 2
-            : owner.Position.Y + (owner.Size.Height - bounds.Height) / 2;
-        window.AppWindow.Move(new PointInt32(
-            Math.Clamp(preferredX, workArea.X,
-                Math.Max(workArea.X, workArea.X + workArea.Width - bounds.Width)),
-            Math.Clamp(preferredY, workArea.Y,
-                Math.Max(workArea.Y, workArea.Y + workArea.Height - bounds.Height))));
+        int preferredX;
+        int preferredY;
+
+        if (preservePosition)
+        {
+            preferredX = window.AppWindow.Position.X;
+            preferredY = window.AppWindow.Position.Y;
+        }
+        else if (owner is null)
+        {
+            preferredX = workArea.X + (workArea.Width - bounds.Width) / 2;
+            preferredY = workArea.Y + (workArea.Height - bounds.Height) / 2;
+        }
+        else
+        {
+            preferredX = owner.Position.X + (owner.Size.Width - bounds.Width) / 2;
+            preferredY = owner.Position.Y + (owner.Size.Height - bounds.Height) / 2;
+        }
+
+        var rightmostPosition = Math.Max(workArea.X, workArea.X + workArea.Width - bounds.Width);
+        var bottommostPosition = Math.Max(workArea.Y, workArea.Y + workArea.Height - bounds.Height);
+        var finalX = Math.Clamp(preferredX, workArea.X, rightmostPosition);
+        var finalY = Math.Clamp(preferredY, workArea.Y, bottommostPosition);
+
+        window.AppWindow.Move(new PointInt32(finalX, finalY));
     }
+
+    #endregion
 }

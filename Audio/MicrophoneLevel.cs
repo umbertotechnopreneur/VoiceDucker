@@ -16,29 +16,50 @@ using NAudio.Wave;
 
 namespace VoiceDucker.Audio;
 
+/// <summary>
+/// Decodes supported capture buffers into a scalar RMS level. Audio bytes are
+/// consumed immediately; software sensitivity is applied separately by the gate.
+/// </summary>
 internal static class MicrophoneLevel
 {
+    #region Private fields
+
     private static readonly Guid PcmSubtype = new("00000001-0000-0010-8000-00aa00389b71");
     private static readonly Guid FloatSubtype = new("00000003-0000-0010-8000-00aa00389b71");
 
+    #endregion
+
+    #region Public methods
+
+    /// <summary>Accepts positive-rate, nonempty-channel float32 or signed PCM16/24/32 formats.</summary>
     public static bool IsSupported(WaveFormat format)
     {
         ArgumentNullException.ThrowIfNull(format);
         var encoding = ResolveEncoding(format);
+
         return format.Channels > 0 && format.SampleRate > 0 &&
             ((encoding == WaveFormatEncoding.IeeeFloat && format.BitsPerSample == 32)
             || (encoding == WaveFormatEncoding.Pcm &&
                 (format.BitsPerSample == 16 || format.BitsPerSample == 24 || format.BitsPerSample == 32)));
     }
 
-    // Software gain on captured RMS is equivalent to scaling PCM before level detection.
+    /// <summary>
+    /// Applies software sensitivity to RMS, equivalent to scaling PCM before measurement.
+    /// Invalid or silent input stays at zero; overflow is limited to the largest finite value.
+    /// </summary>
     public static double ApplyGain(double rms, int decibels)
     {
         if (!double.IsFinite(rms) || rms <= 0) return 0;
+
         var gained = rms * Math.Pow(10, decibels / 20.0);
+
         return double.IsFinite(gained) ? gained : double.MaxValue;
     }
 
+    /// <summary>
+    /// Measures all complete interleaved channel samples in a supported little-endian buffer.
+    /// Incomplete trailing bytes and nonfinite float samples do not contribute to the result.
+    /// </summary>
     public static double Rms(ReadOnlySpan<byte> audio, WaveFormat format)
     {
         if (!IsSupported(format))
@@ -54,6 +75,7 @@ internal static class MicrophoneLevel
         double sum = 0;
         var count = audio.Length / sampleBytes;
         var validCount = 0;
+
         for (var sample = 0; sample < count; sample++)
         {
             var offset = sample * sampleBytes;
@@ -75,6 +97,7 @@ internal static class MicrophoneLevel
                 {
                     raw |= unchecked((int)0xff000000);
                 }
+
                 value = raw / 8388608.0;
             }
             else
@@ -89,6 +112,11 @@ internal static class MicrophoneLevel
         return validCount == 0 ? 0 : Math.Sqrt(sum / validCount);
     }
 
+    #endregion
+
+    #region Implementation
+
+    /// <summary>Resolves extensible PCM/float subtypes to the decoding formats used above.</summary>
     private static WaveFormatEncoding ResolveEncoding(WaveFormat format)
     {
         if (format is not WaveFormatExtensible extensible)
@@ -103,4 +131,6 @@ internal static class MicrophoneLevel
 
         return extensible.SubFormat == PcmSubtype ? WaveFormatEncoding.Pcm : WaveFormatEncoding.Unknown;
     }
+
+    #endregion
 }

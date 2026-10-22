@@ -21,8 +21,14 @@ namespace VoiceDucker;
 /// </summary>
 public partial class App : Application
 {
+    #region Private fields
+
     private SingleInstanceService? _singleInstance;
     private MainWindow? _window;
+
+    #endregion
+
+    #region Initialization
 
     /// <summary>
     /// Initializes the XAML application.
@@ -31,6 +37,10 @@ public partial class App : Application
     {
         InitializeComponent();
     }
+
+    #endregion
+
+    #region Implementation
 
     /// <summary>
     /// Starts the main window, or restores the existing tray window after a second launch.
@@ -45,9 +55,15 @@ public partial class App : Application
             // The named event, rather than the window title, delivers activation.
             var existingWindow = FindWindow(null, "VoiceDucker");
             if (existingWindow == IntPtr.Zero)
+            {
                 existingWindow = FindWindow(null, "VoiceDucker - Trial Expired");
+            }
+
             for (var days = 1; existingWindow == IntPtr.Zero && days <= 30; days++)
+            {
                 existingWindow = FindWindow(null, $"VoiceDucker - Free Trial, {days} {(days == 1 ? "day" : "days")} remaining");
+            }
+
             if (existingWindow == IntPtr.Zero)
             {
                 // Trial editions change the window title; still reactivate the existing instance.
@@ -55,11 +71,13 @@ public partial class App : Application
                     .FirstOrDefault(process => process.Id != Environment.ProcessId && process.MainWindowHandle != IntPtr.Zero);
                 existingWindow = existingProcess?.MainWindowHandle ?? IntPtr.Zero;
             }
+
             if (existingWindow != IntPtr.Zero)
             {
                 GetWindowThreadProcessId(existingWindow, out var processId);
                 _ = AllowSetForegroundWindow(processId);
             }
+
             _singleInstance.RequestActivation();
             _singleInstance.Dispose();
             _singleInstance = null;
@@ -71,26 +89,41 @@ public partial class App : Application
         _window.Closed += (_, _) =>
         {
             _window = null;
-            try { _singleInstance?.Dispose(); }
+            try
+            {
+                _singleInstance?.Dispose();
+            }
             finally
             {
                 _singleInstance = null;
                 Exit();
             }
         };
+
         var dispatcher = _window.DispatcherQueue;
         _singleInstance.Listen(() =>
             dispatcher.TryEnqueue(() => _window?.ShowForRepeatedLaunch()));
         _window.Activate();
     }
 
+    /// <summary>
+    /// Finds a top-level window by class and title for the existing-instance lookup.
+    /// </summary>
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr FindWindow(string? className, string windowName);
 
+    /// <summary>
+    /// Retrieves the process that owns a native window handle.
+    /// </summary>
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
 
+    /// <summary>
+    /// Lets the existing application process bring its window to the foreground.
+    /// </summary>
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool AllowSetForegroundWindow(uint processId);
+
+    #endregion
 }

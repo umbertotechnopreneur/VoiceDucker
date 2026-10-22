@@ -24,13 +24,23 @@ namespace VoiceDucker;
 /// </summary>
 internal static class StartupRegistration
 {
+    #region Private fields
+
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "VibeWare.VoiceDucker";
     private const string StartupTaskId = "VoiceDuckerStartup";
+
     private static readonly string PreferencePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "VibeWare", "VoiceDucker", "startup-preference-set");
 
+    #endregion
+
+    #region Public methods
+
+    /// <summary>
+    /// Applies the first-run startup choice while preserving later application and Windows user preferences.
+    /// </summary>
     public static async Task InitializeDefaultAsync()
     {
         if (IsPackaged())
@@ -64,12 +74,18 @@ internal static class StartupRegistration
         SavePreferenceMarker();
     }
 
+    /// <summary>
+    /// Records that a startup preference has been established so defaults cannot replace it.
+    /// </summary>
     public static void SavePreferenceMarker()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(PreferencePath)!);
         File.WriteAllText(PreferencePath, string.Empty);
     }
 
+    /// <summary>
+    /// Reads startup registration from the package task or the portable executable entry.
+    /// </summary>
     public static async Task<bool> IsEnabledAsync()
     {
         if (IsPackaged())
@@ -83,6 +99,9 @@ internal static class StartupRegistration
         return command?.StartsWith(GetExecutableCommand(), StringComparison.OrdinalIgnoreCase) == true;
     }
 
+    /// <summary>
+    /// Updates the applicable startup mechanism and reports when Windows rejects the request.
+    /// </summary>
     public static async Task SetEnabledAsync(bool enabled)
     {
         if (IsPackaged())
@@ -115,12 +134,22 @@ internal static class StartupRegistration
         }
     }
 
+    #endregion
+
+    #region Implementation
+
+    /// <summary>
+    /// Removes the portable startup entry when package identity owns automatic launch.
+    /// </summary>
     private static void RemoveLegacyRunEntry()
     {
         using var key = Registry.CurrentUser.OpenSubKey(RunKey, true);
         key?.DeleteValue(ValueName, false);
     }
 
+    /// <summary>
+    /// Detects whether the running executable has a Windows package identity.
+    /// </summary>
     private static bool IsPackaged()
     {
         try
@@ -134,12 +163,20 @@ internal static class StartupRegistration
         }
     }
 
+    /// <summary>
+    /// Returns the command stored in the portable startup registration.
+    /// </summary>
     private static string GetCommand() => GetExecutableCommand();
 
+    /// <summary>
+    /// Quotes the current executable path so Windows handles paths containing spaces.
+    /// </summary>
     private static string GetExecutableCommand()
     {
         var path = Environment.ProcessPath ??
                    throw new InvalidOperationException("The executable path is unavailable.");
         return $"\"{path}\"";
     }
+
+    #endregion
 }

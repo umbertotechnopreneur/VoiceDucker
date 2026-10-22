@@ -18,10 +18,22 @@ using System.Runtime.InteropServices;
 
 namespace VoiceDucker;
 
+/// <summary>
+/// Attaches secondary native windows to their application owner without changing activation policy.
+/// </summary>
 internal static class NativeWindowOwner
 {
+    #region Private fields
+
     private const int OwnerWindowIndex = -8;
 
+    #endregion
+
+    #region Public methods
+
+    /// <summary>
+    /// Sets the native owner and reports a Win32 failure without treating a zero previous owner as an error.
+    /// </summary>
     public static void SetOwner(IntPtr windowHandle, IntPtr ownerHandle)
     {
         if (windowHandle == IntPtr.Zero || ownerHandle == IntPtr.Zero)
@@ -38,6 +50,15 @@ internal static class NativeWindowOwner
         }
     }
 
+    #endregion
+
+    #region Native interop
+
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
+    /// <summary>
+    /// Calls the native pointer-sized window-property API used to attach an owner.
+    /// </summary>
     private static extern IntPtr SetWindowLongPtr(IntPtr windowHandle, int index, IntPtr value);
+
+    #endregion
 }

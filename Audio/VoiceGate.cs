@@ -5,6 +5,7 @@ namespace VoiceDucker.Audio;
 /// <summary>A captured level and monotonic observation time; no audio samples are retained.</summary>
 internal sealed record CapturedMicrophoneSample(double RawRms, long Timestamp, long Sequence);
 
+/// <summary>Explains whether capture is off, active, held, or no longer providing fresh levels.</summary>
 internal enum DetectionPhase
 {
     Off,
@@ -25,10 +26,15 @@ internal sealed record GateState(
     double ReleaseThresholdDecibels,
     long SampleAgeMilliseconds)
 {
+    #region Public methods
+
+    /// <summary>Creates an off state while preserving the configured trigger and release thresholds.</summary>
     public static GateState Off(DuckingSettings settings) => new(
         DetectionPhase.Off, false, 0, double.NegativeInfinity,
         settings.ThresholdDecibels,
         settings.ThresholdDecibels - settings.HysteresisDecibels, 0);
+
+    #endregion
 }
 
 /// <summary>
@@ -37,7 +43,13 @@ internal sealed record GateState(
 /// </summary>
 internal sealed class VoiceGate(Func<long>? clock = null)
 {
+    #region Constants
+
     public const int StaleAfterMilliseconds = 1000;
+
+    #endregion
+
+    #region Private fields
 
     private readonly Func<long> _clock = clock ?? (() => Environment.TickCount64);
     private CapturedMicrophoneSample? _latestSample;
@@ -45,9 +57,18 @@ internal sealed class VoiceGate(Func<long>? clock = null)
     private long? _lastLoudTick;
     private bool _signalActive;
 
+    #endregion
+
+    #region Public methods
+
+    /// <summary>
+    /// Classifies the newest scalar observation with the current settings and monotonic time.
+    /// A repeated or reordered observation cannot extend hold; stale capture fails inactive.
+    /// </summary>
     public GateState Evaluate(CapturedMicrophoneSample? sample, DuckingSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
+
         if (!settings.IsValid)
             throw new ArgumentOutOfRangeException(nameof(settings));
 
@@ -92,11 +113,13 @@ internal sealed class VoiceGate(Func<long>? clock = null)
             : heldByHysteresis ? DetectionPhase.Hysteresis
             : holding ? DetectionPhase.Hold
             : DetectionPhase.BelowThreshold;
+
         return new GateState(phase, _signalActive || holding, rms,
             rms > 0 ? 20 * Math.Log10(rms) : double.NegativeInfinity,
             settings.ThresholdDecibels, releaseDecibels, age);
     }
 
+    /// <summary>Forgets observations, hysteresis and hold when a capture generation ends.</summary>
     public void Reset()
     {
         _latestSample = null;
@@ -104,4 +127,6 @@ internal sealed class VoiceGate(Func<long>? clock = null)
         _lastLoudTick = null;
         _signalActive = false;
     }
+
+    #endregion
 }

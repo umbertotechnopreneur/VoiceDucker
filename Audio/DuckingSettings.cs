@@ -15,19 +15,23 @@
 
 namespace VoiceDucker.Audio;
 
+/// <summary>
+/// Immutable user preferences consumed together by detection and playback control.
+/// Validation defines the supported ranges for persisted and live settings.
+/// </summary>
 internal sealed record DuckingSettings(
     int ReductionPercent = 90,
     int FadeDownMilliseconds = 300,
     int FadeUpMilliseconds = 2000,
     bool IncludeOtherSources = false)
 {
+    #region Defaults and preferences
+
     public static readonly double DefaultThresholdDecibels = 20 * Math.Log10(0.018);
 
     public double ThresholdDecibels { get; init; } = DefaultThresholdDecibels;
 
     public int HysteresisDecibels { get; init; } = 3;
-
-    public double GetThresholdAmplitude() => Math.Pow(10, ThresholdDecibels / 20);
 
     public int MicrophoneGainDecibels { get; init; } = 0;
 
@@ -41,12 +45,26 @@ internal sealed record DuckingSettings(
 
     public bool EnableMicrophoneOnWindowsStartup { get; init; }
 
+    #endregion
+
+    #region Public methods
+
+    /// <summary>Converts the configured dBFS threshold to a linear RMS amplitude.</summary>
+    public double GetThresholdAmplitude() => Math.Pow(10, ThresholdDecibels / 20);
+
+    /// <summary>Returns the saved microphone opt-in for any application launch.</summary>
     public bool ShouldEnableMicrophoneOnLaunch() => EnableMicrophoneOnWindowsStartup;
 
+    /// <summary>Excludes this application and user-hidden process names from ducking.</summary>
     public bool IsProcessExcluded(string name) => PlaybackIdentity.IsOwnProcess(name) ||
         BlacklistedProcesses.Any(hidden => PlaybackIdentity.NormalizeProcessName(hidden).Equals(
             PlaybackIdentity.NormalizeProcessName(name), StringComparison.OrdinalIgnoreCase));
 
+    #endregion
+
+    #region Validation
+
+    /// <summary>Checks all settings before they enter the worker or saved state.</summary>
     public bool IsValid => double.IsFinite(ThresholdDecibels) && ThresholdDecibels is >= -60 and <= 0 &&
                            HysteresisDecibels is >= 0 and <= 12 &&
                            MicrophoneGainDecibels is >= -24 and <= 36 && ReductionPercent is >= 0 and <= 100 &&
@@ -57,4 +75,6 @@ internal sealed record DuckingSettings(
                            LastSettingsSection is "" or "microphone" or "volume" or "apps" &&
                            BlacklistedProcesses is not null &&
                            BlacklistedProcesses.All(name => !string.IsNullOrWhiteSpace(name));
+
+    #endregion
 }
