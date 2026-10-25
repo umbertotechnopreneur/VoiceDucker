@@ -97,6 +97,26 @@ settings, so install a newer package over the existing one to keep them.
 
 ### Manual listening profiles
 
+Five presets are always available. New settings start with **Talking to AI**;
+existing listening choices and personal profiles are preserved.
+
+| Preset | Reduction | Fade down | Wait | Fade back |
+| --- | --- | --- | --- | --- |
+| Talking to AI (default) | 90% | 300 ms | 650 ms | 2,000 ms |
+| Client calls | 95% | 150 ms | 1,500 ms | 3,000 ms |
+| Meetings | 80% | 400 ms | 1,200 ms | 2,500 ms |
+| Recording a demo | 95% | 150 ms | 1,800 ms | 3,000 ms |
+| Relaxed conversation | 50% | 700 ms | 2,000 ms | 4,000 ms |
+
+All presets use softer transitions, the default microphone detection parameters,
+and Spotify-only automatic lowering. This leaves browser conversations and meeting
+playback outside automatic lowering until you choose otherwise. Adjust the threshold
+for your microphone and room. Presets are starting points, not tested acoustic
+calibrations or changes to your call's microphone signal.
+
+Presets remain available unchanged. Use **Save as new** to keep a personal variation;
+Update saved, Rename and Delete apply to personal profiles only.
+
 Choose a saved **Listening profile** in the main window. In **Settings > Manual
 profiles**, enter a name and choose **Save as new** to capture the current reduction,
 fade times and curve, detection settings, other-app playback and hidden apps.

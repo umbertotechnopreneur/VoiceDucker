@@ -43,11 +43,11 @@ internal sealed record DuckingSettings(
 
     public string LastSettingsSection { get; init; } = string.Empty;
 
-    public bool SmoothTransitions { get; init; }
+    public bool SmoothTransitions { get; init; } = true;
 
     public ListeningProfile[] Profiles { get; init; } = [];
 
-    public string SelectedProfileId { get; init; } = string.Empty;
+    public string SelectedProfileId { get; init; } = ListeningPresets.DefaultId;
 
     public bool EnableMicrophoneOnWindowsStartup { get; init; }
 
@@ -84,6 +84,7 @@ internal sealed record DuckingSettings(
                            Profiles.Select(profile => profile.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() == Profiles.Length &&
                            Profiles.Select(profile => profile.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() == Profiles.Length &&
                            SelectedProfileId is not null && (SelectedProfileId.Length == 0 ||
+                               ListeningPresets.Find(SelectedProfileId) is not null ||
                                Profiles.Any(profile => profile.Id == SelectedProfileId)) &&
                            BlacklistedProcesses is not null &&
                            BlacklistedProcesses.All(name => !string.IsNullOrWhiteSpace(name));

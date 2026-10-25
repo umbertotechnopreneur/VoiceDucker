@@ -47,13 +47,19 @@ internal sealed record ApplicationState(DuckingSettings Settings, EngineStatus A
     public string PauseText => $"Paused · {PauseSecondsRemaining / 60:00}:{PauseSecondsRemaining % 60:00}";
     public bool CanPause => !Busy && Audio.Running;
     public bool CanResume => !Busy && IsPaused && License.CanUse;
-    public bool CanManageProfile => !Busy && SelectedProfile is not null;
+    public bool CanManageProfile => !Busy && Settings.Profiles.Any(profile => profile.Id == Settings.SelectedProfileId);
     public string MonitoringButtonText => IsPaused ? "Disable (cancel pause)" : Audio.Running ? "Disable" : "Enable";
-    public ListeningProfile? SelectedProfile => Settings.Profiles.FirstOrDefault(profile => profile.Id == Settings.SelectedProfileId);
+    public ListeningProfile? SelectedProfile => Settings.Profiles.FirstOrDefault(profile => profile.Id == Settings.SelectedProfileId)
+        ?? ListeningPresets.Find(Settings.SelectedProfileId);
     public IReadOnlyList<ProfileChoice> ProfileChoices => new[] { new ProfileChoice(string.Empty, "Custom settings") }
+        .Concat(ListeningPresets.All.Select(profile => new ProfileChoice(profile.Id,
+            profile.Name + (profile.Id == ListeningPresets.DefaultId ? " · default preset" : " · preset"))))
         .Concat(Settings.Profiles.Select(profile => new ProfileChoice(profile.Id, profile.Name))).ToArray();
     public string ProfileHint => SelectedProfile is { } profile
-        ? profile.Preferences.Matches(Settings) ? "Saved profile applied." : "Modified · choose Update saved to keep these changes."
+        ? ListeningPresets.Find(profile.Id) is not null
+            ? profile.Preferences.Matches(Settings) ? "Preset applied · use Save as new to customize."
+                : "Modified preset · use Save as new to keep these changes."
+            : profile.Preferences.Matches(Settings) ? "Saved profile applied." : "Modified · choose Update saved to keep these changes."
         : "Current settings · save a profile in Settings.";
 
     /// <summary>Allows monitoring changes when no competing model operation is pending.</summary>

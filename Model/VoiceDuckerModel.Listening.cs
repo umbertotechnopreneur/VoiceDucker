@@ -20,7 +20,7 @@ internal sealed partial class VoiceDuckerModel
             return;
         }
 
-        var profile = Current.Settings.Profiles.FirstOrDefault(item => item.Id == id);
+        var profile = Current.Settings.Profiles.FirstOrDefault(item => item.Id == id) ?? ListeningPresets.Find(id);
         if (profile is null) { ReportViewError("This profile is no longer available."); return; }
         UpdateSettings(settings => profile.Preferences.ApplyTo(settings) with { SelectedProfileId = id });
     }
@@ -47,7 +47,7 @@ internal sealed partial class VoiceDuckerModel
     public void UpdateSelectedProfile()
     {
         var id = Current.Settings.SelectedProfileId;
-        if (id.Length == 0) { ReportViewError("Select a saved profile to update."); return; }
+        if (!RequirePersonalProfile(id)) return;
         UpdateSettings(settings => settings with
         {
             Profiles = settings.Profiles.Select(profile => profile.Id == id
@@ -58,7 +58,7 @@ internal sealed partial class VoiceDuckerModel
     public void RenameSelectedProfile(string name)
     {
         var id = Current.Settings.SelectedProfileId;
-        if (id.Length == 0) { ReportViewError("Select a saved profile to rename."); return; }
+        if (!RequirePersonalProfile(id)) return;
         name = name.Trim();
         if (!AcceptProfileName(name, id)) return;
         UpdateSettings(settings => settings with
@@ -71,11 +71,19 @@ internal sealed partial class VoiceDuckerModel
     public void DeleteSelectedProfile()
     {
         var id = Current.Settings.SelectedProfileId;
+        if (!RequirePersonalProfile(id)) return;
         UpdateSettings(settings => settings with
         {
             Profiles = settings.Profiles.Where(profile => profile.Id != id).ToArray(),
             SelectedProfileId = string.Empty
         }, applyAudio: false);
+    }
+
+    private bool RequirePersonalProfile(string id)
+    {
+        if (Current.Settings.Profiles.Any(profile => profile.Id == id)) return true;
+        ReportViewError("Select a personal profile to manage it. Use Save as new to customize a preset.");
+        return false;
     }
 
     private bool AcceptProfileName(string name, string? exceptId = null)

@@ -46,7 +46,7 @@ VBWR E -->
                       IsExpanded="False" MinHeight="40" Padding="12" HorizontalAlignment="Stretch"
                       HorizontalContentAlignment="Stretch" Expanding="SettingsExpander_Expanding">
                 <StackPanel Spacing="12">
-                    <TextBlock Text="Save your listening settings and apply them manually. Profiles never enable the microphone or change startup options or the selected input."
+                    <TextBlock Text="Choose one of five presets or save your own listening settings. Use Save as new to customize a preset. Profiles never enable the microphone or change startup options or the selected input."
                                TextWrapping="Wrap" FontSize="12" Opacity="0.75" />
                     <ComboBox x:Name="SettingsProfileComboBox" DisplayMemberPath="Name" HorizontalAlignment="Stretch"
                               SelectionChanged="ProfileComboBox_SelectionChanged" AutomationProperties.Name="Manage listening profile" />
