@@ -205,7 +205,7 @@ internal sealed record ApplicationState(DuckingSettings Settings, EngineStatus A
         var canEdit = !stream.Muted && Audio.Ready && maximum > 0;
         var volumeText = stream.Muted
             ? "MUTED"
-            : $"Volume {stream.ActualVolume * 100:0.#}% · Normal {stream.NormalVolume * 100:0}%";
+            : $"Volume {stream.ActualVolume * 100:0}% · Normal {stream.NormalVolume * 100:0}%";
 
         return new PlaybackRowState(
             stream.Key,
