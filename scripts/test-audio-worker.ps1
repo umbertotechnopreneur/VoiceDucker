@@ -21,6 +21,7 @@ $sourceRoot = [Security.SecurityElement]::Escape($projectRoot)
  <Compile Include="$sourceRoot\Audio\VoiceGate.cs" Link="VoiceGate.cs"/>
  <Compile Include="$sourceRoot\Audio\MicrophoneLevel.cs" Link="MicrophoneLevel.cs"/>
  <Compile Include="$sourceRoot\Audio\DuckingSettings.cs" Link="DuckingSettings.cs"/>
+ <Compile Include="$sourceRoot\Audio\ListeningProfile.cs" Link="ListeningProfile.cs"/>
  <Compile Include="$sourceRoot\Audio\PlaybackIdentity.cs" Link="PlaybackIdentity.cs"/>
  </ItemGroup></Project>
 "@ | Set-Content -LiteralPath (Join-Path $testRoot 'WorkerTests.csproj') -Encoding utf8

@@ -95,6 +95,55 @@ and remembers the window size and position too.
 MSIX updates keep these preferences. Uninstalling the MSIX removes its private
 settings, so install a newer package over the existing one to keep them.
 
+### Manual listening profiles
+
+Five presets are always available. New settings start with **Talking to AI**;
+existing listening choices and personal profiles are preserved.
+
+| Preset | Reduction | Fade down | Wait | Fade back |
+| --- | --- | --- | --- | --- |
+| Talking to AI (default) | 90% | 300 ms | 650 ms | 2,000 ms |
+| Client calls | 95% | 150 ms | 1,500 ms | 3,000 ms |
+| Meetings | 80% | 400 ms | 1,200 ms | 2,500 ms |
+| Recording a demo | 95% | 150 ms | 1,800 ms | 3,000 ms |
+| Relaxed conversation | 50% | 700 ms | 2,000 ms | 4,000 ms |
+
+All presets use softer transitions, the default microphone detection parameters,
+and Spotify-only automatic lowering. This leaves browser conversations and meeting
+playback outside automatic lowering until you choose otherwise. Adjust the threshold
+for your microphone and room. Presets are starting points, not tested acoustic
+calibrations or changes to your call's microphone signal.
+
+Presets remain available unchanged. Use **Save as new** to keep a personal variation;
+Update saved, Rename and Delete apply to personal profiles only.
+
+Choose a saved **Listening profile** in the main window. In **Settings > Manual
+profiles**, enter a name and choose **Save as new** to capture the current reduction,
+fade times and curve, detection settings, other-app playback and hidden apps.
+**Update saved** explicitly replaces the selected profile with the current choices;
+editing a setting does not overwrite the saved profile. You can rename or delete
+profiles. Deleting one keeps the current listening settings.
+
+Profiles do not enable monitoring, change the selected microphone or startup
+options, or store playback-session volumes. Your current settings remain active
+on the next launch; profiles are applied only when you select them manually.
+
+### Take a temporary break
+
+While monitoring is enabled, choose **Pause monitoring…** for 5, 15 or 30 minutes.
+The microphone stops and VoiceDucker requests restoration of the startup safety
+levels. The main window shows the remaining time and **Resume now**. **Disable
+(cancel pause)** cancels automatic resumption. Closing the app also discards the
+pause; next-launch monitoring still follows your saved startup opt-in.
+
+At the end of the pause, monitoring resumes only after license, audio readiness
+and restoration checks succeed. If they fail, monitoring stays off and the app
+reports the problem. Pending restoration is never described as successful.
+
+Under **Volume & timing**, enable **Softer transitions** to ease into and out of
+automatic volume changes using the configured fade times. Turn it off for the
+existing linear fades. This choice is included in manual profiles.
+
 Under **Apps & startup**, **Start with Windows** controls automatic launch.
 The independent **Enable microphone on startup** checkbox starts monitoring
 whenever VoiceDucker opens, including manual launches. It is off by default and

@@ -17,6 +17,7 @@ $sourceRoot=[Security.SecurityElement]::Escape($projectRoot)
 <Compile Include="$sourceRoot\Audio\PlaybackVolumeEvents.cs" Link="PlaybackVolumeEvents.cs"/>
 <Compile Include="$sourceRoot\Audio\AudioDiagnostics.cs" Link="AudioDiagnostics.cs"/>
 <Compile Include="$sourceRoot\Audio\DuckingSettings.cs" Link="DuckingSettings.cs"/>
+<Compile Include="$sourceRoot\Audio\ListeningProfile.cs" Link="ListeningProfile.cs"/>
 <Compile Include="$sourceRoot\Audio\PlaybackIdentity.cs" Link="PlaybackIdentity.cs"/>
  </ItemGroup></Project>
 "@ | Set-Content -LiteralPath (Join-Path $testRoot 'RestorationTests.csproj') -Encoding utf8
@@ -58,7 +59,8 @@ var checks = 0;
 void Check(bool ok, string message) { checks++; if (!ok) throw new InvalidOperationException(message); }
 void Near(float actual, float expected, string message) => Check(Math.Abs(actual-expected)<0.0001f, $"{message}: {actual:R} != {expected:R}");
 long now=1000;
-var settings = new DuckingSettings(50,1000,2000,true);
+// These regression expectations exercise linear fades independently of the app default.
+var settings = new DuckingSettings(50,1000,2000,true) { SmoothTransitions = false };
 var events = new PlaybackVolumeEvents();
 var music = new FakeSession("music",1);
 using var source = new FakeMixer(music);

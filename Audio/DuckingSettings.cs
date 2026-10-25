@@ -43,6 +43,12 @@ internal sealed record DuckingSettings(
 
     public string LastSettingsSection { get; init; } = string.Empty;
 
+    public bool SmoothTransitions { get; init; } = true;
+
+    public ListeningProfile[] Profiles { get; init; } = [];
+
+    public string SelectedProfileId { get; init; } = ListeningPresets.DefaultId;
+
     public bool EnableMicrophoneOnWindowsStartup { get; init; }
 
     #endregion
@@ -72,7 +78,14 @@ internal sealed record DuckingSettings(
                            RestoreDelayMilliseconds is >= 0 and <= 10000 &&
                            FadeDownMilliseconds is >= 0 and <= 5000 &&
                            FadeUpMilliseconds is >= 0 and <= 30000 &&
-                           LastSettingsSection is "" or "microphone" or "volume" or "apps" &&
+                           LastSettingsSection is "" or "microphone" or "volume" or "apps" or "profiles" &&
+                           Profiles is not null && Profiles.Length <= 32 &&
+                           Profiles.All(profile => profile is not null && profile.IsValid) &&
+                           Profiles.Select(profile => profile.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() == Profiles.Length &&
+                           Profiles.Select(profile => profile.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() == Profiles.Length &&
+                           SelectedProfileId is not null && (SelectedProfileId.Length == 0 ||
+                               ListeningPresets.Find(SelectedProfileId) is not null ||
+                               Profiles.Any(profile => profile.Id == SelectedProfileId)) &&
                            BlacklistedProcesses is not null &&
                            BlacklistedProcesses.All(name => !string.IsNullOrWhiteSpace(name));
 

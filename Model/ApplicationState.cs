@@ -41,8 +41,29 @@ internal sealed record ApplicationState(DuckingSettings Settings, EngineStatus A
 {
     #region Public methods
 
+    public long? PauseDeadlineTick { get; init; }
+    public int PauseSecondsRemaining { get; init; }
+    public bool IsPaused => PauseDeadlineTick.HasValue;
+    public string PauseText => $"Paused · {PauseSecondsRemaining / 60:00}:{PauseSecondsRemaining % 60:00}";
+    public bool CanPause => !Busy && Audio.Running;
+    public bool CanResume => !Busy && IsPaused && License.CanUse;
+    public bool CanManageProfile => !Busy && Settings.Profiles.Any(profile => profile.Id == Settings.SelectedProfileId);
+    public string MonitoringButtonText => IsPaused ? "Disable (cancel pause)" : Audio.Running ? "Disable" : "Enable";
+    public ListeningProfile? SelectedProfile => Settings.Profiles.FirstOrDefault(profile => profile.Id == Settings.SelectedProfileId)
+        ?? ListeningPresets.Find(Settings.SelectedProfileId);
+    public IReadOnlyList<ProfileChoice> ProfileChoices => new[] { new ProfileChoice(string.Empty, "Custom settings") }
+        .Concat(ListeningPresets.All.Select(profile => new ProfileChoice(profile.Id,
+            profile.Name + (profile.Id == ListeningPresets.DefaultId ? " · default preset" : " · preset"))))
+        .Concat(Settings.Profiles.Select(profile => new ProfileChoice(profile.Id, profile.Name))).ToArray();
+    public string ProfileHint => SelectedProfile is { } profile
+        ? ListeningPresets.Find(profile.Id) is not null
+            ? profile.Preferences.Matches(Settings) ? "Preset applied · use Save as new to customize."
+                : "Modified preset · use Save as new to keep these changes."
+            : profile.Preferences.Matches(Settings) ? "Saved profile applied." : "Modified · choose Update saved to keep these changes."
+        : "Current settings · save a profile in Settings.";
+
     /// <summary>Allows monitoring changes when no competing model operation is pending.</summary>
-    public bool CanToggle => !Busy && (Audio.Running || License.CanUse);
+    public bool CanToggle => !Busy && (IsPaused || Audio.Running || License.CanUse);
 
     /// <summary>Allows input selection after playback is ready and pending operations have finished.</summary>
     public bool CanSelectMicrophone => Audio.Ready && !Busy;
@@ -82,6 +103,7 @@ internal sealed record ApplicationState(DuckingSettings Settings, EngineStatus A
     {
         get
         {
+            if (IsPaused) return "PAUSED";
             if (!Audio.Ready)
             {
                 return Busy ? "PREPARING" : "AUDIO UNAVAILABLE";
@@ -110,6 +132,10 @@ internal sealed record ApplicationState(DuckingSettings Settings, EngineStatus A
             {
                 return error;
             }
+
+            if (IsPaused) return Audio.Restoring
+                ? "Paused. Microphone off; startup volumes are being restored."
+                : "Paused. Microphone off; monitoring will resume automatically.";
 
             if (!Audio.Ready)
             {
@@ -237,3 +263,5 @@ internal sealed record ApplicationState(DuckingSettings Settings, EngineStatus A
 
     #endregion
 }
+
+internal sealed record ProfileChoice(string Id, string Name);
