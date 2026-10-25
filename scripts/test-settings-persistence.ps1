@@ -29,6 +29,7 @@ $sourceRoot = [System.Security.SecurityElement]::Escape($projectRoot)
     <Compile Include="$sourceRoot\AtomicJsonFile.cs" Link="AtomicJsonFile.cs" />
     <Compile Include="$sourceRoot\SettingsStore.cs" Link="SettingsStore.cs" />
     <Compile Include="$sourceRoot\Audio\DuckingSettings.cs" Link="DuckingSettings.cs" />
+    <Compile Include="$sourceRoot\Audio\ListeningProfile.cs" Link="ListeningProfile.cs" />
     <Compile Include="$sourceRoot\Audio\PlaybackIdentity.cs" Link="PlaybackIdentity.cs" />
     <Compile Include="$sourceRoot\Licensing\LicensePolicy.cs" Link="LicensePolicy.cs" />
   </ItemGroup>
@@ -94,8 +95,7 @@ Check(LicensePolicy.CanUse(LicenseState.Trial, trialEnd, trialEnd.AddTicks(-1)) 
 
 var loaded = SettingsStore.Load(path, out var error);
 bool SameSettings(DuckingSettings left, DuckingSettings right) =>
-    (left with { BlacklistedProcesses = right.BlacklistedProcesses }) == right &&
-    left.BlacklistedProcesses.SequenceEqual(right.BlacklistedProcesses);
+    System.Text.Json.JsonSerializer.Serialize(left) == System.Text.Json.JsonSerializer.Serialize(right);
 Check(error is null && SameSettings(loaded, expected), "Settings did not survive abrupt process termination.");
 Check(loaded.IsProcessExcluded("SPOTIFY.exe") && loaded.IsProcessExcluded("fluentflyout") &&
     loaded.IsProcessExcluded("VoiceDucker") && loaded.IsProcessExcluded("voiceducker.EXE") &&

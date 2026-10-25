@@ -24,8 +24,10 @@ $sourceRoot = [Security.SecurityElement]::Escape($projectRoot)
     <Compile Include="Fakes.cs" />
     <Compile Include="$sourceRoot\Model\ApplicationState.cs" Link="ApplicationState.cs" />
     <Compile Include="$sourceRoot\Model\VoiceDuckerModel.cs" Link="VoiceDuckerModel.cs" />
+    <Compile Include="$sourceRoot\Model\VoiceDuckerModel.Listening.cs" Link="VoiceDuckerModel.Listening.cs" />
     <Compile Include="$sourceRoot\Audio\EngineStatus.cs" Link="EngineStatus.cs" />
     <Compile Include="$sourceRoot\Audio\DuckingSettings.cs" Link="DuckingSettings.cs" />
+    <Compile Include="$sourceRoot\Audio\ListeningProfile.cs" Link="ListeningProfile.cs" />
     <Compile Include="$sourceRoot\Audio\PlaybackIdentity.cs" Link="PlaybackIdentity.cs" />
     <Compile Include="$sourceRoot\Audio\VoiceGate.cs" Link="VoiceGate.cs" />
     <Compile Include="$sourceRoot\Licensing\LicensePolicy.cs" Link="LicensePolicy.cs" />
