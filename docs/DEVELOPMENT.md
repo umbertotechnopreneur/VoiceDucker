@@ -32,8 +32,11 @@ The app is at `artifacts/app/win-x64/VoiceDucker.exe`. Omit `-Run` to build only
 - `MainWindow.xaml.cs`: window lifetime, tray and status display.
 - `MainWindow.Settings.cs`: settings and microphone selection.
 - `MainWindow.Playback.cs`: app rows, sliders and hidden apps.
+- `MainWindow.Listening.cs`: profile and pause presentation and command forwarding.
 - `Model/VoiceDuckerModel.cs`: owns application state, commands and persistence.
+- `Model/VoiceDuckerModel.Listening.cs`: manual profile commands and runtime suspension.
 - `Model/ApplicationState.cs`: immutable state and presentation projections.
+- `Audio/ListeningProfile.cs`: saved audio preferences, excluding hardware, startup and live volumes.
 - `Audio/DuckingEngine.cs`: one app-lifetime worker for audio and commands.
 - `Audio/VoiceGate.cs`: decides when microphone sound should lower playback.
 - `Audio/PlaybackSessions.cs`: lowers and restores app volumes.
@@ -60,6 +63,23 @@ playback snapshot and complete normal license checks before enabling monitoring.
 Changing the preference does not start capture immediately. Windows autostart
 uses `StartupTask` for packaged launches and the Run key for portable launches.
 Do not add old-version migration paths.
+
+Manual profiles live in the existing atomic settings document. Applying a profile
+submits a complete listening-settings snapshot; microphone identity, startup
+preferences and session reference volumes are outside the profile. Profile edits
+are explicit, and the model derives the selected profile's modified indication.
+
+Temporary suspension lives only in `ApplicationState`. The model computes its
+remaining seconds from a monotonic deadline on the existing audio observations,
+so no UI timer owns the resume decision. Pause and resume share the serialized
+lifecycle command path. Disable cancels the deadline; resume checks entitlement,
+readiness and pending restoration before starting capture. All capture and mixer
+operations stay on the existing audio worker.
+
+Softer automatic fades use smoothstep interpolation from confirmed actual volume
+to the target. A changed target, duration or curve restarts an unfinished fade at
+the latest confirmed level. Safety restoration and explicit volume edits keep
+their existing paths; startup and normal references are never derived from fades.
 
 ## Run the checks
 

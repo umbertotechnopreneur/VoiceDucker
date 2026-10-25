@@ -42,6 +42,42 @@ VBWR E -->
                                              HorizontalAlignment="Left" Padding="0" MinHeight="0" FontSize="13"
                                              AutomationProperties.Name="Open the online VoiceDucker parameter guide" />
                         </StackPanel>
+            <Expander x:Name="ProfilesExpander" Header="Manual profiles"
+                      IsExpanded="False" MinHeight="40" Padding="12" HorizontalAlignment="Stretch"
+                      HorizontalContentAlignment="Stretch" Expanding="SettingsExpander_Expanding">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Save your listening settings and apply them manually. Profiles never enable the microphone or change startup options or the selected input."
+                               TextWrapping="Wrap" FontSize="12" Opacity="0.75" />
+                    <ComboBox x:Name="SettingsProfileComboBox" DisplayMemberPath="Name" HorizontalAlignment="Stretch"
+                              SelectionChanged="ProfileComboBox_SelectionChanged" AutomationProperties.Name="Manage listening profile" />
+                    <TextBlock x:Name="SettingsProfileHintText" TextWrapping="Wrap" FontSize="12" Opacity="0.75" />
+                    <TextBox x:Name="ProfileNameBox" Header="Profile name" PlaceholderText="e.g. Talking to AI"
+                             MaxLength="40" AutomationProperties.Name="New or renamed profile name" />
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <Button Content="Save as new" Click="SaveProfile_Click" HorizontalAlignment="Stretch" />
+                        <Button x:Name="UpdateProfileButton" Grid.Column="1" Content="Update saved" Click="UpdateProfile_Click"
+                                HorizontalAlignment="Stretch" ToolTipService.ToolTip="Replace the selected profile with your current listening settings" />
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="RenameProfileButton" Content="Rename" Click="RenameProfile_Click" />
+                        <Button x:Name="DeleteProfileButton" Content="Delete…">
+                            <Button.Flyout>
+                                <Flyout>
+                                    <StackPanel Spacing="12" MaxWidth="260">
+                                        <TextBlock Text="Delete the selected saved profile? Current listening settings will stay active."
+                                                   TextWrapping="Wrap" />
+                                        <Button Content="Delete profile" Click="DeleteProfile_Click" />
+                                    </StackPanel>
+                                </Flyout>
+                            </Button.Flyout>
+                        </Button>
+                    </StackPanel>
+                    <TextBlock Text="Includes reduction, fade times and curve, detection settings, other-app playback and hidden apps. Changes are saved to a profile only when you choose Update saved."
+                               TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
+                </StackPanel>
+            </Expander>
+
             <Expander x:Name="DetectionExpander" Header="Microphone &amp; detection"
                       IsExpanded="False" MinHeight="40" Padding="12" HorizontalAlignment="Stretch"
                       HorizontalContentAlignment="Stretch"
@@ -159,6 +195,10 @@ VBWR E -->
                                        Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged" />
                         </Grid>
                         <TextBlock Text="Wait keeps music quiet through short pauses. Fade back is the time to return to the previous volume."
+                                   TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
+                        <CheckBox x:Name="SmoothTransitionsCheckBox" Content="Softer transitions"
+                                  Click="SmoothTransitions_Click" />
+                        <TextBlock Text="Ease into and out of automatic volume changes, using the same fade times. Turn off for linear fades."
                                    TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
                     </StackPanel>
                 </StackPanel>
@@ -344,6 +384,13 @@ VBWR E -->
                            FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
             </StackPanel>
 
+            <StackPanel Spacing="4">
+                <ComboBox x:Name="ProfileComboBox" Header="Listening profile" DisplayMemberPath="Name"
+                          HorizontalAlignment="Stretch" SelectionChanged="ProfileComboBox_SelectionChanged"
+                          AutomationProperties.Name="Listening profile" />
+                <TextBlock x:Name="ProfileHintText" FontSize="12" Opacity="0.68" TextWrapping="Wrap" />
+            </StackPanel>
+
             <Button x:Name="ToggleButton" Click="ToggleButton_Click"
                     HorizontalAlignment="Stretch" MinHeight="46"
                     Background="#346A9C" Foreground="#FFF4DC">
@@ -353,6 +400,32 @@ VBWR E -->
                     <TextBlock x:Name="ToggleButtonLabel" Text="Enable" />
                 </StackPanel>
             </Button>
+
+            <StackPanel Spacing="6">
+                <Button x:Name="PauseButton" Content="Pause monitoring…" HorizontalAlignment="Stretch"
+                        ToolTipService.ToolTip="Temporarily turn off the microphone and restore startup volumes">
+                    <Button.Flyout>
+                        <MenuFlyout>
+                            <MenuFlyoutItem Text="Pause for 5 minutes" Click="Pause5_Click" />
+                            <MenuFlyoutItem Text="Pause for 15 minutes" Click="Pause15_Click" />
+                            <MenuFlyoutItem Text="Pause for 30 minutes" Click="Pause30_Click" />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+                <Border x:Name="PausedPanel" Visibility="Collapsed" Padding="12" CornerRadius="6"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                    <StackPanel Spacing="8">
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <TextBlock x:Name="PauseCountdownText" VerticalAlignment="Center" FontFamily="Consolas" />
+                            <Button x:Name="ResumeButton" Grid.Column="1" Content="Resume now" Click="Resume_Click" />
+                        </Grid>
+                        <TextBlock Text="Microphone off. Monitoring resumes when the timer ends. Disable cancels the timer."
+                                   TextWrapping="Wrap" FontSize="12" Opacity="0.75" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
 
             <Expander x:Name="AudioStreamsExpander" Header="Active audio streams"
                       IsExpanded="True" MinHeight="40" Padding="12" HorizontalAlignment="Stretch"
@@ -371,28 +444,35 @@ VBWR E -->
             <Border Background="Transparent" PointerEntered="Footer_PointerEntered"
                     PointerExited="Footer_PointerExited" GotFocus="Footer_GotFocus">
             <StackPanel x:Name="FooterLinks" Spacing="12">
-            <Grid ColumnSpacing="16">
+            <Grid ColumnSpacing="16" RowSpacing="8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <StackPanel x:Name="FooterPurchasePanel" Visibility="Collapsed"
+                <StackPanel x:Name="FooterPurchasePanel" Grid.ColumnSpan="2" Visibility="Collapsed"
                             Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <TextBlock x:Name="FooterTrialText" Text="You're using the trial version"
                                FontSize="11" VerticalAlignment="Center" />
                     <HyperlinkButton Content="Purchase" Padding="0" FontSize="12"
                                      Click="Purchase_Click" />
                 </StackPanel>
-                <StackPanel Grid.Column="1" HorizontalAlignment="Right"
-                            VerticalAlignment="Center" Orientation="Horizontal" Spacing="6">
-                    <TextBlock Text="This is VibeWare ·" VerticalAlignment="Center" FontSize="12"
+                <StackPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Right"
+                            VerticalAlignment="Center" Orientation="Horizontal" Spacing="12">
+                    <StackPanel VerticalAlignment="Center" Spacing="2">
+                    <TextBlock Text="This is VibeWare" FontSize="12"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     <HyperlinkButton NavigateUri="https://umbertogiacobbi.biz/vibeware/manifesto"
-                                     Padding="0" FontSize="12" AutomationProperties.Name="Read the VibeWare manifesto">
-                        <StackPanel Orientation="Horizontal" Spacing="5">
-                            <FontIcon Glyph="&#xE8A5;" FontFamily="Segoe Fluent Icons" FontSize="12" />
-                            <TextBlock Text="Manifesto" />
-                        </StackPanel>
+                                     Content="Manifesto" HorizontalAlignment="Left"
+                                     Padding="0" MinHeight="0" FontSize="12" AutomationProperties.Name="Read the VibeWare manifesto" />
+                    </StackPanel>
+                    <HyperlinkButton NavigateUri="https://github.com/umbertotechnopreneur/VibeWare"
+                                     Padding="0" AutomationProperties.Name="VibeWare on GitHub">
+                        <Image Source="ms-appx:///Assets/vibeware-logo.png" Width="96" Stretch="Uniform"
+                               AutomationProperties.Name="VibeWare logo" />
                     </HyperlinkButton>
                 </StackPanel>
             </Grid>

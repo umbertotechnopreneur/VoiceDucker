@@ -10,7 +10,7 @@ namespace VoiceDucker.Model;
 /// Owns application state, persistence and commands. The view renders Current and sends intent.
 /// Core Audio and microphone work belong to the model's single audio worker.
 /// </summary>
-internal sealed class VoiceDuckerModel : IDisposable
+internal sealed partial class VoiceDuckerModel : IDisposable
 {
     #region Private fields
 
@@ -20,6 +20,7 @@ internal sealed class VoiceDuckerModel : IDisposable
     private readonly DuckingEngine _engine;
     private readonly StoreLicenseService _licensing;
     private readonly Timer _licenseTimer;
+    private readonly Microsoft.UI.Dispatching.DispatcherQueue _dispatcher;
 
     private ApplicationState _current;
     private bool _trialNoticeShown;
@@ -32,6 +33,7 @@ internal sealed class VoiceDuckerModel : IDisposable
     /// <summary>Loads saved choices and connects the audio and license adapters to the application snapshot.</summary>
     public VoiceDuckerModel(Window owner)
     {
+        _dispatcher = owner.DispatcherQueue;
         var settings = SettingsStore.Load(out var error);
         _engine = new DuckingEngine(settings);
         _licensing = new StoreLicenseService(owner);
@@ -105,6 +107,13 @@ internal sealed class VoiceDuckerModel : IDisposable
     /// <summary>Serializes Enable or Disable, retrying playback initialization before a new capture starts.</summary>
     public Task ToggleMonitoringAsync() => RunOperationAsync(async () =>
     {
+        if (Current.IsPaused)
+        {
+            ClearPause();
+            await _engine.SetMonitoringAsync(false);
+            return;
+        }
+
         var enabled = !_engine.State.Running;
 
         if (enabled)
@@ -362,7 +371,29 @@ internal sealed class VoiceDuckerModel : IDisposable
     }
 
     /// <summary>Replaces only the audio observation, leaving accepted preferences owned by the model.</summary>
-    private void OnAudioChanged(EngineStatus audio) => Change(state => state with { Audio = audio });
+    private void OnAudioChanged(EngineStatus audio)
+    {
+        Change(state => state with
+        {
+            Audio = audio,
+            PauseSecondsRemaining = state.PauseDeadlineTick is { } deadline
+                ? (int)Math.Max(0, Math.Ceiling((deadline - Environment.TickCount64) / 1000d)) : 0
+        });
+
+        var current = Current;
+        if (current.IsPaused && current.PauseSecondsRemaining == 0 &&
+            Interlocked.CompareExchange(ref _pauseResumeQueued, 1, 0) == 0)
+        {
+            // Store entitlement work must not run inside the audio worker's publication callback.
+            var deadline = current.PauseDeadlineTick!.Value;
+            if (!_dispatcher.TryEnqueue(() => _ = ResumeExpiredPauseAsync(deadline)))
+            {
+                Interlocked.Exchange(ref _pauseResumeQueued, 0);
+                ClearPause();
+                ReportViewError("Monitoring remains off because automatic resume could not be scheduled.");
+            }
+        }
+    }
 
     /// <summary>Checks time-based trial access and refreshes the application license presentation.</summary>
     private void CheckLicenseExpiration()
@@ -393,6 +424,7 @@ internal sealed class VoiceDuckerModel : IDisposable
 
         if (!_licensing.CanUseApp)
         {
+            ClearPause();
             _ = RunOperationAsync(async () =>
             {
                 // Recheck after earlier operations, including an enable still in progress.
@@ -482,7 +514,7 @@ internal sealed class VoiceDuckerModel : IDisposable
         {
             await Task.Delay(TimeSpan.FromSeconds(15), _lifetime.Token);
 
-            if (!_engine.State.Running)
+            if (!_engine.State.Running && !Current.IsPaused)
             {
                 Change(state => state with { MonitoringReminderPending = true });
             }

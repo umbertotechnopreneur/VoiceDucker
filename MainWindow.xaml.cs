@@ -181,13 +181,14 @@ public sealed partial class MainWindow : Window
         try
         {
             RenderSettings(state);
+            RenderListeningControls(state);
             RenderPlaybackRows(state.PlaybackRows);
             RefreshHiddenApps(state.HiddenProcesses);
             FeedbackText.Text = state.Feedback;
             StatusText.Text = state.StatusText;
             VisualStateText.Text = state.VisualStateText;
-            ToggleButtonLabel.Text = state.Audio.Running ? "Disable" : "Enable";
-            ToggleButtonIcon.Glyph = state.Audio.Running ? "\uE769" : "\uE768";
+            ToggleButtonLabel.Text = state.MonitoringButtonText;
+            ToggleButtonIcon.Glyph = state.Audio.Running || state.IsPaused ? "\uE769" : "\uE768";
             ToggleButton.IsEnabled = state.CanToggle;
             MicrophoneComboBox.IsEnabled = state.CanSelectMicrophone;
             MicrophoneNameText.Text = state.MicrophoneNameText;
@@ -334,7 +335,7 @@ public sealed partial class MainWindow : Window
         if (!_rendering)
         {
             _model.SetSettingsSection(sender == DetectionExpander ? "microphone"
-                : sender == VolumeExpander ? "volume" : "apps");
+                : sender == VolumeExpander ? "volume" : sender == ProfilesExpander ? "profiles" : "apps");
         }
     }
 

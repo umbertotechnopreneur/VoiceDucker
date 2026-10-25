@@ -95,6 +95,35 @@ and remembers the window size and position too.
 MSIX updates keep these preferences. Uninstalling the MSIX removes its private
 settings, so install a newer package over the existing one to keep them.
 
+### Manual listening profiles
+
+Choose a saved **Listening profile** in the main window. In **Settings > Manual
+profiles**, enter a name and choose **Save as new** to capture the current reduction,
+fade times and curve, detection settings, other-app playback and hidden apps.
+**Update saved** explicitly replaces the selected profile with the current choices;
+editing a setting does not overwrite the saved profile. You can rename or delete
+profiles. Deleting one keeps the current listening settings.
+
+Profiles do not enable monitoring, change the selected microphone or startup
+options, or store playback-session volumes. Your current settings remain active
+on the next launch; profiles are applied only when you select them manually.
+
+### Take a temporary break
+
+While monitoring is enabled, choose **Pause monitoring…** for 5, 15 or 30 minutes.
+The microphone stops and VoiceDucker requests restoration of the startup safety
+levels. The main window shows the remaining time and **Resume now**. **Disable
+(cancel pause)** cancels automatic resumption. Closing the app also discards the
+pause; next-launch monitoring still follows your saved startup opt-in.
+
+At the end of the pause, monitoring resumes only after license, audio readiness
+and restoration checks succeed. If they fail, monitoring stays off and the app
+reports the problem. Pending restoration is never described as successful.
+
+Under **Volume & timing**, enable **Softer transitions** to ease into and out of
+automatic volume changes using the configured fade times. Turn it off for the
+existing linear fades. This choice is included in manual profiles.
+
 Under **Apps & startup**, **Start with Windows** controls automatic launch.
 The independent **Enable microphone on startup** checkbox starts monitoring
 whenever VoiceDucker opens, including manual launches. It is off by default and

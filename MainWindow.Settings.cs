@@ -58,6 +58,7 @@ public sealed partial class MainWindow
             "microphone" => DetectionExpander,
             "volume" => VolumeExpander,
             "apps" => AppsExpander,
+            "profiles" => ProfilesExpander,
             _ => null
         };
 

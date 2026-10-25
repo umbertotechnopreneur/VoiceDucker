@@ -365,12 +365,12 @@ internal sealed class PlaybackSessions(IPlaybackSource source, PlaybackVolumeEve
 
             session.Automatic = true;
             ApplyTarget(session, session.Normal * (1f - settings.ReductionPercent / 100f),
-                settings.FadeDownMilliseconds, now, true);
+                settings.FadeDownMilliseconds, now, true, settings.SmoothTransitions);
         }
         else if (session.Automatic)
         {
             // Return only sessions previously controlled by the app, including a now-silent tail.
-            ApplyTarget(session, session.Normal, settings.FadeUpMilliseconds, now, false);
+            ApplyTarget(session, session.Normal, settings.FadeUpMilliseconds, now, false, settings.SmoothTransitions);
             if (session.Completed)
             {
                 session.Automatic = false;
@@ -383,17 +383,18 @@ internal sealed class PlaybackSessions(IPlaybackSource source, PlaybackVolumeEve
     /// Advances a fade from confirmed actual volume and verifies each changed native write.
     /// A settled target acknowledges quantized readback so polling cannot repeatedly write it.
     /// </summary>
-    private void ApplyTarget(Session session, float target, int duration, long now, bool ducking)
+    private void ApplyTarget(Session session, float target, int duration, long now, bool ducking, bool smooth = false)
     {
         target = Math.Clamp(target, 0, 1);
 
         if (!session.FadeValid || session.Target != target ||
-            (!session.Completed && session.Duration != duration))
+            (!session.Completed && (session.Duration != duration || session.Smooth != smooth)))
         {
             session.Target = target;
             session.Start = session.Actual;
             session.StartTick = now;
             session.Duration = session.Actual == target ? 0 : duration;
+            session.Smooth = smooth;
             session.FadeValid = true;
             session.Completed = false;
             session.Acknowledged = false;
@@ -402,7 +403,9 @@ internal sealed class PlaybackSessions(IPlaybackSource source, PlaybackVolumeEve
 
         var fadeProgress = session.Duration == 0 ? 1f
             : Math.Clamp((float)(now - session.StartTick) / session.Duration, 0, 1);
-        var requestedVolume = fadeProgress >= 1 ? target : session.Start + (target - session.Start) * fadeProgress;
+        // Smoothstep keeps both ends gentle while retargeting always starts at confirmed actual volume.
+        var shapedProgress = session.Smooth ? fadeProgress * fadeProgress * (3 - 2 * fadeProgress) : fadeProgress;
+        var requestedVolume = fadeProgress >= 1 ? target : session.Start + (target - session.Start) * shapedProgress;
         var targetAlreadyConfirmed = fadeProgress >= 1 && session.Acknowledged &&
             session.Actual == session.AcknowledgedActual;
 
@@ -488,6 +491,7 @@ internal sealed class PlaybackSessions(IPlaybackSource source, PlaybackVolumeEve
         public float Start { get; set; }
         public long StartTick { get; set; }
         public int Duration { get; set; }
+        public bool Smooth { get; set; }
         public bool FadeValid { get; set; }
         public bool Completed { get; set; }
         public bool Acknowledged { get; set; }
