@@ -26,11 +26,11 @@ Open a pull request for source changes. The **Portable Windows ZIPs** workflow
 builds both architectures and checks archive integrity and SHA-256 checksums.
 After owner review, run it manually with `release=true`, `tag=v0.2.0-stable`,
 and `draft=true`. Review both ZIPs and publish the draft when approved.
-Builds verify pinned dependency archive hashes against the first-import evidence
-in `docs/dependency-imports.json`. That evidence cites the completed Defender
-scans attached to 0.1.1. Unchanged imports are not rescanned. An unknown or changed
-import blocks the build until its official archive and staged extracted files
-have completed a targeted first-import scan and the evidence is updated.
+Builds compare dependency archive hashes with the pins in
+`docs/dependency-imports.json`. Before pinning a new or changed import, stage its
+official archive and extracted files and complete a targeted Defender scan.
+The catalog records the source and archive hash. Scan results are checked during
+the import and then discarded.
 Builds and tests never launch antivirus scans or scan generated application files.
 Release dependency verification reports identify the reused evidence; they are not
 new malware scans or a guarantee that the application is secure.

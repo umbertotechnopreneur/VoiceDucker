@@ -1,15 +1,9 @@
 {
-  "evidence": [
-    {
-      "url": "https://github.com/umbertotechnopreneur/VoiceDucker/releases/download/v0.1.1-stable/VoiceDucker-win-x64.security-scan.txt",
-      "sha256": "e0377aa7b98720a65d7429fea9038b987ab87965088551530286f7c3d3587625"
-    },
-    {
-      "url": "https://github.com/umbertotechnopreneur/VoiceDucker/releases/download/v0.1.1-stable/VoiceDucker-win-arm64.security-scan.txt",
-      "sha256": "b4dbdfeb83607d829228e0ff9ab387aeb219a33109e660942748f4d4ccf7dad0"
-    }
-  ],
   "packages": {
+    "Microsoft.NETCore.App.Runtime.win-arm64/10.0.14": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "b939042d9e9a8c1fe7b7e8632a199e6809b630faad42a35e57e92c3d3c9eed51"
+    },
     "Microsoft.NETCore.App.Runtime.win-x64/10.0.14": {
       "source": "https://api.nuget.org/v3/index.json",
       "sha256": "a3ea61b4a2da6d28e562dd1cdacf80eb4dd6b9727b0a2b47f9d6aba90dbbcb1f"
