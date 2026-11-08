@@ -33,6 +33,7 @@ The app is at `artifacts/app/win-x64/VoiceDucker.exe`. Omit `-Run` to build only
 - `MainWindow.Settings.cs`: settings and microphone selection.
 - `MainWindow.Playback.cs`: app rows, sliders and hidden apps.
 - `MainWindow.Listening.cs`: profile and pause presentation and command forwarding.
+- `MemoryGuard.cs`: independent private-memory sampling, native warnings and bounded recovery.
 - `Model/VoiceDuckerModel.cs`: owns application state, commands and persistence.
 - `Model/VoiceDuckerModel.Listening.cs`: manual profile commands and runtime suspension.
 - `Model/ApplicationState.cs`: immutable state and presentation projections.
@@ -126,6 +127,25 @@ checks cleanup diagnostics and confirms the entire app process exits. The test
 notification generator and UI Automation helper also terminate before return.
 
 ## Local volume diagnostics
+
+The application-lifetime memory guard samples private bytes every five seconds
+on its own MTA thread, independently of UI dispatch and audio observations. Above
+1 GiB it presents a native warning on another thread, allows five seconds for the
+notice, and invokes model-owned audio worker disposal (bounded by ten seconds).
+It reports unconfirmed restoration before using Windows App SDK `AppInstance.Restart`.
+This API handles termination and relaunch for both packaged and unpackaged apps:
+[Microsoft restart API documentation](https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/applifecycle/applifecycle-restart).
+Normal restarts retain the saved microphone startup opt-in and all settings.
+
+`memory-recovery.json` reserves at most one automatic memory restart per ten
+minutes. A repeated limit event, or an unreadable/unwritable marker, instead warns,
+stops audio and exits without relaunching. A failed restart also warns before exit.
+`memory-recovery.log` is always enabled for these events and rotates at 64 KiB,
+retaining one previous file. It records counters, recovery decisions, restoration
+status and errors, never microphone samples. These files are beside `settings.json`.
+The guard starts only in the primary instance and is cancelled on normal exit.
+Building does not exercise memory thresholds, native notices, forced recovery or
+audio restoration; live recovery validation remains an owner task.
 
 To diagnose a volume restoration problem, close the existing instance, set
 `$env:VOICEDUCKER_AUDIO_LOG = '1'`, then run the Debug build from that shell.

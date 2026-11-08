@@ -3,11 +3,9 @@
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
+using VoiceDucker.Audio;
 using VoiceDucker.Model;
-using Windows.Foundation;
-using Windows.UI;
 
 namespace VoiceDucker;
 
@@ -28,14 +26,11 @@ public sealed partial class MainWindow : Window
     private bool _viewClosed;
     private bool _trialDialogOpen;
     private int _renderQueued;
-    private readonly Storyboard _micLedPulse = new();
+    private string? _lastRenderError;
     private readonly Storyboard _mixerPulse = new();
     private readonly Dictionary<string, StreamRow> _streamRows = new(StringComparer.Ordinal);
     private readonly WindowPlacementService _windowPlacement;
     private readonly bool _restoredWindowPlacement;
-    private readonly DispatcherTimer _footerTimer = new() { Interval = TimeSpan.FromSeconds(30) };
-    private readonly Storyboard _footerFade = new();
-    private bool _footerPointerOver;
 
     #endregion
 
@@ -47,23 +42,13 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        ConfigureNumericControls();
 
-        var footerFade = new DoubleAnimation
-        {
-            From = 1,
-            To = 0,
-            Duration = new Duration(TimeSpan.FromSeconds(3))
-        };
-        Storyboard.SetTarget(footerFade, FooterLinks);
-        Storyboard.SetTargetProperty(footerFade, "Opacity");
-        _footerFade.Children.Add(footerFade);
-        _footerFade.Completed += (_, _) => FooterLinks.IsHitTestVisible = false;
-        _footerTimer.Tick += FooterTimer_Tick;
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
-        AddOpacityPulse(_micLedPulse, MicStatusIcon, minimumOpacity: 0.15);
         AddOpacityPulse(_mixerPulse, MixerOnImage, minimumOpacity: 0);
 
         _model = new VoiceDuckerModel(this);
+        ConfigureListeningControls();
         _windowPlacement = new WindowPlacementService(this, () => SettingsSplitView.IsPaneOpen,
             _model.ReportViewError, _model.LoadWindowPlacement, _model.SaveWindowPlacement);
         _restoredWindowPlacement = _windowPlacement.TryRestore(out var settingsPaneOpen);
@@ -80,6 +65,9 @@ public sealed partial class MainWindow : Window
     #endregion
 
     #region Public methods and events
+
+    /// <summary>Forwards the application's emergency shutdown command without reading audio state.</summary>
+    internal bool StopAudioForMemoryRecovery() => _model.StopAudioForMemoryRecovery();
 
     /// <summary>Reveals the existing window without replacing its controls or scroll position.</summary>
     internal void ShowForRepeatedLaunch()
@@ -111,14 +99,17 @@ public sealed partial class MainWindow : Window
         }
 
         UpdateSettingsPaneWidth();
-        RevealFooter();
         _windowPlacement.StartTracking();
 
         try
         {
             var handle = WinRT.Interop.WindowNative.GetWindowHandle(this);
             var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
-            _tray = new TrayIconService(handle, iconPath, () => _model.Current.Audio.Running);
+            _tray = new TrayIconService(handle, iconPath, () =>
+            {
+                var state = _model.Current;
+                return (state.TrayMonitoringText, state.CanToggle);
+            });
             _tray.ToggleRequested += () => _ = _model.ToggleMonitoringAsync();
             _tray.AboutRequested += ShowAbout;
             _tray.ExitRequested += ExitApplication;
@@ -182,8 +173,6 @@ public sealed partial class MainWindow : Window
         {
             RenderSettings(state);
             RenderListeningControls(state);
-            RenderPlaybackRows(state.PlaybackRows);
-            RefreshHiddenApps(state.HiddenProcesses);
             FeedbackText.Text = state.Feedback;
             StatusText.Text = state.StatusText;
             VisualStateText.Text = state.VisualStateText;
@@ -227,17 +216,31 @@ public sealed partial class MainWindow : Window
             LicensePanel.Visibility = license.PanelVisible ? Visibility.Visible : Visibility.Collapsed;
             LicenseStatusText.Text = license.StatusText;
             _tray?.SetStatus(state.VisualStateText);
+
+            // Keep readiness and microphone status current even if an optional row fails.
+            RenderPlaybackRows(state.PlaybackRows);
+            RefreshHiddenApps(state.HiddenProcesses);
+            _lastRenderError = null;
         }
         catch (Exception exception)
         {
-            // Do not synchronously publish another render while reporting a view failure.
-            DispatcherQueue.TryEnqueue(() =>
+            var error = exception.ToString();
+            FeedbackText.Text = $"Window could not be updated: {exception.Message}";
+
+            // Reporting publishes another snapshot. The same failure must not feed itself
+            // indefinitely, allocating controls and starving normal dispatcher work.
+            if (_lastRenderError != error)
             {
-                if (!_viewClosed)
+                _lastRenderError = error;
+                AudioDiagnostics.Write(() => $"view-render-error error={error}");
+                DispatcherQueue.TryEnqueue(() =>
                 {
-                    _model.ReportViewError($"Window could not be updated: {exception.Message}");
-                }
-            });
+                    if (!_viewClosed)
+                    {
+                        _model.ReportViewError($"Window could not be updated: {exception.Message}");
+                    }
+                });
+            }
         }
         finally
         {
@@ -279,7 +282,6 @@ public sealed partial class MainWindow : Window
     {
         _trialDialogOpen = true;
         _model.DismissTrialExpiredNotice();
-        RevealFooter();
 
         try
         {
@@ -395,7 +397,7 @@ public sealed partial class MainWindow : Window
         storyboard.Children.Add(animation);
     }
 
-    /// <summary>Changes microphone artwork and pulses only when its displayed on/off state changes.</summary>
+    /// <summary>Pulses the computer artwork only when its displayed microphone state changes.</summary>
     private void SetMicLedActive(bool active)
     {
         if (_micLedActive == active)
@@ -404,82 +406,15 @@ public sealed partial class MainWindow : Window
         }
 
         _micLedActive = active;
-        MicStatusBorder.Background = new SolidColorBrush(active
-            ? Color.FromArgb(255, 6, 5, 7) : Color.FromArgb(255, 38, 59, 80));
-        MicStatusBorder.BorderBrush = new SolidColorBrush(active
-            ? Color.FromArgb(255, 116, 29, 39) : Color.FromArgb(255, 246, 162, 76));
-
         if (active)
         {
-            var gradient = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
-            gradient.GradientStops.Add(new GradientStop { Color = Color.FromArgb(255, 126, 24, 34), Offset = 0 });
-            gradient.GradientStops.Add(new GradientStop { Color = Color.FromArgb(255, 247, 112, 106), Offset = 0.39 });
-            gradient.GradientStops.Add(new GradientStop { Color = Color.FromArgb(255, 168, 38, 45), Offset = 0.71 });
-            gradient.GradientStops.Add(new GradientStop { Color = Color.FromArgb(255, 74, 14, 23), Offset = 1 });
-            MicStatusIcon.Foreground = gradient;
-            _micLedPulse.Begin();
             _mixerPulse.Begin();
         }
         else
         {
-            MicStatusIcon.Foreground = new SolidColorBrush(Color.FromArgb(255, 246, 162, 76));
-            _micLedPulse.Stop();
             _mixerPulse.Stop();
-            MicStatusIcon.Opacity = 1;
             MixerOnImage.Opacity = 0;
         }
-    }
-
-    /// <summary>Reveals footer links in their reserved layout space and restarts their visible interval.</summary>
-    private void RevealFooter()
-    {
-        _footerFade.Stop();
-        FooterLinks.Opacity = 1;
-        FooterLinks.IsHitTestVisible = true;
-        _footerTimer.Stop();
-        _footerTimer.Start();
-    }
-
-    /// <summary>Keeps footer links visible while the pointer is over them.</summary>
-    private void Footer_PointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs args)
-    {
-        _footerPointerOver = true;
-        RevealFooter();
-    }
-
-    /// <summary>Starts a new footer visibility interval after pointer interaction ends.</summary>
-    private void Footer_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs args)
-    {
-        _footerPointerOver = false;
-        _footerTimer.Stop();
-        _footerTimer.Start();
-    }
-
-    /// <summary>Reveals footer links when keyboard navigation reaches them.</summary>
-    private void Footer_GotFocus(object sender, RoutedEventArgs args) => RevealFooter();
-
-    /// <summary>Fades the footer only when neither keyboard focus nor the pointer is inside it.</summary>
-    private void FooterTimer_Tick(object? sender, object args)
-    {
-        var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(RootPanel.XamlRoot) as DependencyObject;
-
-        while (focused is not null)
-        {
-            if (focused == FooterLinks)
-            {
-                return;
-            }
-
-            focused = VisualTreeHelper.GetParent(focused);
-        }
-
-        if (_footerPointerOver)
-        {
-            return;
-        }
-
-        _footerTimer.Stop();
-        _footerFade.Begin();
     }
 
     /// <summary>Opens the About window from the main footer.</summary>
@@ -494,7 +429,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        _aboutWindow = new AboutWindow();
+        _aboutWindow = new AboutWindow(App.ReadDisplayVersion());
         _aboutWindow.Closed += (_, _) => _aboutWindow = null;
         _aboutWindow.Activate();
     }
@@ -559,10 +494,6 @@ public sealed partial class MainWindow : Window
         _viewClosed = true;
         _model.StateChanged -= OnModelStateChanged;
         _windowPlacement.SizeChanged -= UpdateSettingsPaneWidth;
-        _footerTimer.Stop();
-        _footerTimer.Tick -= FooterTimer_Tick;
-        _footerFade.Stop();
-        _micLedPulse.Stop();
         _mixerPulse.Stop();
         AppWindow.Closing -= OnWindowClosing;
         try

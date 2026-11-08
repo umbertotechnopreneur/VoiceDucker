@@ -70,9 +70,10 @@ The ZIP needs no installer; it is unsigned, so Windows may show a security promp
 
 ## Choose which apps get quieter
 
-Spotify is included by default.
+Spotify and other playing apps are included by default for new settings.
+Existing saved choices and personal profiles are preserved.
 
-- Open **Settings > Apps & startup** and turn on **Also lower other apps** for browsers and other players.
+- Open **Settings > Apps & startup** and use **Also lower other apps** to include or exclude browsers and other players.
 - To leave an app alone, hover over its name and click the **X** (**Hide**).
 - To bring it back, open **Hidden apps** and click its **X** (**Show**).
 
@@ -109,8 +110,8 @@ existing listening choices and personal profiles are preserved.
 | Relaxed conversation | 50% | 700 ms | 2,000 ms | 4,000 ms |
 
 All presets use softer transitions, the default microphone detection parameters,
-and Spotify-only automatic lowering. This leaves browser conversations and meeting
-playback outside automatic lowering until you choose otherwise. Adjust the threshold
+and automatic lowering for Spotify and other playing apps. Hide a browser or meeting
+app if you want its playback left alone. Adjust the threshold
 for your microphone and room. Presets are starting points, not tested acoustic
 calibrations or changes to your call's microphone signal.
 
@@ -119,7 +120,8 @@ Update saved, Rename and Delete apply to personal profiles only.
 
 Choose a saved **Listening profile** in the main window. In **Settings > Manual
 profiles**, enter a name and choose **Save as new** to capture the current reduction,
-fade times and curve, detection settings, other-app playback and hidden apps.
+fade times and curve, detection settings and other-app playback.
+Hidden apps are global: changing profiles never clears or replaces your exclusions.
 **Update saved** explicitly replaces the selected profile with the current choices;
 editing a setting does not overwrite the saved profile. You can rename or delete
 profiles. Deleting one keeps the current listening settings.
@@ -161,6 +163,19 @@ Windows playback; your recording's sound depends on its audio sources.
 
 Opening VoiceDucker again shows the existing window, not a second copy.
 
+VoiceDucker checks its private process memory every five seconds on a separate
+thread. Above 1 GiB (1,073,741,824 bytes), it shows a Windows warning, stops the
+microphone, attempts to restore startup playback volumes and restarts automatically.
+The warning also works when the main window is unresponsive. Saved settings stay
+in place; microphone startup follows your saved opt-in. If restoration cannot be
+confirmed, a separate warning asks you to check playback volumes.
+
+To prevent a restart loop, another memory-limit event within ten minutes closes
+the app without relaunching it. If automatic restart fails, reopen the app manually.
+Recovery writes a small local `memory-recovery.log` and a restart timestamp beside
+the settings, even when optional audio diagnostics are off. These files contain no
+recordings and are never uploaded.
+
 Each slider shows the app's **current playback volume** and moves with automatic
 lowering and restoration. **Normal** shows the level to return to when sound
 detection ends. With normal volume at 36% and reduction at 50%, the slider falls
@@ -184,6 +199,10 @@ width. It applies the actual session volume to Windows' pre-volume signal readin
 so automatic lowering is reflected in the displayed level. System master volume
 and speaker processing are not included. Its scale is in decibels, so its filled
 length is not a volume percentage.
+Every listed session has this meter, including browsers. An active session can
+still be silent: **No signal** means its measured input is below the playback
+threshold. Its meter remains empty and its slider is unavailable until playback
+resumes; it does not receive a new automatic reduction while silent.
 Detection threshold controls when lowering starts; **Reduce volume by** controls
 how far the volume is lowered. Moving the threshold farther below an already
 detected microphone level does not increase the amount of lowering.
@@ -208,7 +227,7 @@ licensing. This does not change the source license.
 
 I care about what goes into this project. Before I add a third-party library or prebuilt binary, including files supplied without source code, I scan the downloaded package, its extracted files and any dependencies with Microsoft Windows Defender. I keep new imports aside until the scan finishes without detections.
 
-I keep a record of where each new import came from and the scan result. If a scan cannot finish or flags something, I leave it out.
+If a scan cannot finish or flags something, I leave the import out. Scan results are checked during import and are not retained as reports or histories.
 
 ---
 

@@ -1,5 +1,6 @@
 // VoiceDucker - Copyright (c) 2026 Umberto Giacobbi. MIT license.
 
+using System.Collections.Immutable;
 using VoiceDucker.Audio;
 
 namespace VoiceDucker.Model;
@@ -7,6 +8,8 @@ namespace VoiceDucker.Model;
 internal sealed partial class VoiceDuckerModel
 {
     private int _pauseResumeQueued;
+
+    public static IReadOnlyList<int> PauseDurations { get; } = Array.AsReadOnly(new[] { 5, 15, 30 });
 
     public void SetSmoothTransitions(bool enabled) =>
         UpdateSettings(settings => settings with { SmoothTransitions = enabled });
@@ -38,8 +41,8 @@ internal sealed partial class VoiceDuckerModel
         var id = Guid.NewGuid().ToString("D");
         UpdateSettings(settings => settings with
         {
-            Profiles = settings.Profiles.Append(new ListeningProfile(id, name,
-                ListeningPreferences.Capture(settings))).ToArray(),
+            Profiles = settings.Profiles.Add(new ListeningProfile(id, name,
+                ListeningPreferences.Capture(settings))),
             SelectedProfileId = id
         }, applyAudio: false);
     }
@@ -51,7 +54,7 @@ internal sealed partial class VoiceDuckerModel
         UpdateSettings(settings => settings with
         {
             Profiles = settings.Profiles.Select(profile => profile.Id == id
-                ? profile with { Preferences = ListeningPreferences.Capture(settings) } : profile).ToArray()
+                ? profile with { Preferences = ListeningPreferences.Capture(settings) } : profile).ToImmutableArray()
         }, applyAudio: false);
     }
 
@@ -64,7 +67,7 @@ internal sealed partial class VoiceDuckerModel
         UpdateSettings(settings => settings with
         {
             Profiles = settings.Profiles.Select(profile => profile.Id == id
-                ? profile with { Name = name } : profile).ToArray()
+                ? profile with { Name = name } : profile).ToImmutableArray()
         }, applyAudio: false);
     }
 
@@ -74,7 +77,7 @@ internal sealed partial class VoiceDuckerModel
         if (!RequirePersonalProfile(id)) return;
         UpdateSettings(settings => settings with
         {
-            Profiles = settings.Profiles.Where(profile => profile.Id != id).ToArray(),
+            Profiles = settings.Profiles.Where(profile => profile.Id != id).ToImmutableArray(),
             SelectedProfileId = string.Empty
         }, applyAudio: false);
     }
@@ -88,8 +91,11 @@ internal sealed partial class VoiceDuckerModel
 
     private bool AcceptProfileName(string name, string? exceptId = null)
     {
-        if (string.IsNullOrWhiteSpace(name) || name.Length > 40 || name.Any(char.IsControl))
-        { ReportViewError("Enter a profile name between 1 and 40 characters."); return false; }
+        if (!ListeningProfile.IsValidName(name))
+        {
+            ReportViewError($"Enter a profile name between 1 and {ListeningProfile.MaxNameLength} characters.");
+            return false;
+        }
         if (Current.Settings.Profiles.Any(profile => profile.Id != exceptId &&
             profile.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
         { ReportViewError("A profile with this name already exists."); return false; }
@@ -99,7 +105,10 @@ internal sealed partial class VoiceDuckerModel
     /// <summary>Stops capture and requests safety restoration. Suspension exists only in runtime state.</summary>
     public Task PauseAsync(int minutes) => RunOperationAsync(async () =>
     {
-        if (minutes is not (5 or 15 or 30)) throw new ArgumentOutOfRangeException(nameof(minutes));
+        if (!PauseDurations.Contains(minutes))
+        {
+            throw new ArgumentOutOfRangeException(nameof(minutes));
+        }
         if (!_engine.State.Running) throw new InvalidOperationException("Enable monitoring before pausing.");
         await _engine.SetMonitoringAsync(false);
         Change(state => state with
@@ -126,9 +135,7 @@ internal sealed partial class VoiceDuckerModel
         await _licensing.RefreshAsync();
         if (!_licensing.CanUseApp)
             throw new InvalidOperationException("Monitoring remains off because the license could not be verified.");
-        if (!_engine.State.Ready || _engine.State.Restoring || _engine.State.Error is not null)
-            throw new InvalidOperationException("Monitoring remains off. Resolve the audio or restoration error, then press Enable.");
-        await _engine.SetMonitoringAsync(true);
+        await _engine.SetMonitoringAsync(true, resumeFromPause: true);
     }
 
     private void ClearPause() => Change(state => state with { PauseDeadlineTick = null, PauseSecondsRemaining = 0 });

@@ -25,22 +25,13 @@ public sealed partial class AboutWindow : Window
     #region Initialization
 
     /// <summary>
-    /// Initializes the About content using the packaged version or assembly fallback.
+    /// Initializes the About content using the supplied application version.
     /// </summary>
-    public AboutWindow()
+    internal AboutWindow(string version)
     {
         InitializeComponent();
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
-
-        try
-        {
-            var version = Windows.ApplicationModel.Package.Current.Id.Version;
-            VersionText.Text = $"Version {version.Major}.{version.Minor}.{version.Build}.{version.Revision}";
-        }
-        catch (InvalidOperationException)
-        {
-            VersionText.Text = $"Version {typeof(App).Assembly.GetName().Version?.ToString(3) ?? "unknown"}";
-        }
+        VersionText.Text = $"Version {version}";
 
         AboutPanel.Loaded += OnAboutPanelLoaded;
     }

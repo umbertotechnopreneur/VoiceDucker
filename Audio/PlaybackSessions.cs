@@ -5,15 +5,29 @@ namespace VoiceDucker.Audio;
 /// <summary>Immutable presentation state separating the user's normal level from actual mixer readback.</summary>
 internal sealed record PlaybackStream(string Key, string Name, int ProcessId,
     float NormalVolume, float ActualVolume, float TargetVolume, float Peak,
-    bool Muted, bool IsSpotify, bool IsLowered, bool IsEligible);
+    bool Muted, bool IsSpotify, bool IsLowered, bool IsEligible)
+{
+    /// <summary>Uses the worker's signal threshold so the model can explain unavailable edits.</summary>
+    public bool HasAudibleSignal => PlaybackSignal.HasSignal(Peak);
+}
+
+/// <summary>Shares the playback signal rule between worker decisions and immutable presentation.</summary>
+internal static class PlaybackSignal
+{
+    public static bool HasSignal(float peak) => float.IsFinite(peak) && peak > 0.001f;
+}
 
 /// <summary>A scalar transport observation for one endpoint/session instance at discovery time.</summary>
 internal sealed record PlaybackObservation(string Key, string Name, int ProcessId,
     float Volume, float Peak, bool Muted, bool Active);
 
-/// <summary>Keeps playback observations and individual errors, indicating whether device enumeration completed.</summary>
+/// <summary>
+/// Keeps playback observations and errors. SessionExpiry reports known lifecycle states,
+/// with true for expired and false for active or inactive. Omitted keys have no new evidence.
+/// </summary>
 internal sealed record PlaybackReadResult(IReadOnlyList<PlaybackObservation> Sessions,
-    IReadOnlyList<string> Errors, bool Enumerated = true);
+    IReadOnlyList<string> Errors, bool Enumerated = true,
+    IReadOnlyDictionary<string, bool>? SessionExpiry = null);
 
 /// <summary>Worker-owned transport. The controller and its fake share the same scalar contract.</summary>
 internal interface IPlaybackSource : IDisposable
@@ -37,12 +51,11 @@ internal sealed class PlaybackSessions(IPlaybackSource source, PlaybackVolumeEve
 {
     #region Private fields
 
-    private const float AudiblePeak = 0.001f;
     private const float VerificationTolerance = 0.0001f;
     private readonly Dictionary<string, Session> _sessions = new(StringComparer.Ordinal);
     private readonly Func<long> _clock = clock ?? (() => Environment.TickCount64);
     private string[] _errors = [];
-    private PlaybackStream[] _streams = [];
+    private IReadOnlyList<PlaybackStream> _streams = [];
 
     #endregion
 
@@ -54,17 +67,23 @@ internal sealed class PlaybackSessions(IPlaybackSource source, PlaybackVolumeEve
     /// <summary>Distinct discovery, control and verification failures from the most recent update.</summary>
     public IReadOnlyList<string> Errors => _errors;
 
-    /// <summary>Whether an owned session still needs its immutable startup volume restored.</summary>
-    public bool HasPendingRestoration => _sessions.Values.Any(session => session.RestoreStartup);
+    /// <summary>Whether a session that has not expired still needs its startup volume restored.</summary>
+    public bool HasPendingRestoration => _sessions.Values.Any(session => session.HasPendingRestoration);
 
     /// <summary>Whether a pending restoration currently has an accessible, unmuted session to advance.</summary>
     public bool CanAdvanceRestoration => _sessions.Values.Any(session =>
-        session.RestoreStartup && session.Present && !session.Muted);
+        session.HasPendingRestoration && session.Present && !session.Muted);
 
     /// <summary>Explains deferred restoration instead of claiming that unavailable audio was restored.</summary>
-    public string? RestorationError => HasPendingRestoration
-        ? $"Startup volume restoration is pending for {_sessions.Values.Count(session => session.RestoreStartup)} session(s), including muted or unavailable playback."
-        : null;
+    public string? RestorationError
+    {
+        get
+        {
+            var pending = _sessions.Values.Count(session => session.HasPendingRestoration);
+            return pending == 0 ? null
+                : $"Startup volume restoration is pending for {pending} session(s), including muted or unavailable playback.";
+        }
+    }
 
     #endregion
 
@@ -170,11 +189,19 @@ internal sealed class PlaybackSessions(IPlaybackSource source, PlaybackVolumeEve
         errors.AddRange(read.Errors);
 
         foreach (var session in _sessions.Values)
+        {
             session.Present = false;
+            if (read.SessionExpiry?.TryGetValue(session.Key, out var expired) == true)
+            {
+                session.Expired = expired;
+                if (expired) session.FadeValid = false;
+            }
+        }
 
         foreach (var observation in read.Sessions)
         {
-            if (!float.IsFinite(observation.Volume)) continue;
+            if (!float.IsFinite(observation.Volume) ||
+                read.SessionExpiry?.GetValueOrDefault(observation.Key) == true) continue;
 
             if (!_sessions.TryGetValue(observation.Key, out var session))
             {
@@ -183,6 +210,7 @@ internal sealed class PlaybackSessions(IPlaybackSource source, PlaybackVolumeEve
                 AudioDiagnostics.Write(() => $"startup-session session={session.Key} process={session.Name} original={session.Startup:R}");
             }
 
+            session.Expired = false;
             var observedVolume = observation.Volume;
 
             // A delayed foreign callback must still describe the current native level.
@@ -243,13 +271,13 @@ internal sealed class PlaybackSessions(IPlaybackSource source, PlaybackVolumeEve
         foreach (var session in _sessions.Values.Where(session => !session.Present))
             CompletePending(session, new InvalidOperationException("This audio stream ended or became unavailable before its volume could be changed."));
 
-        _streams = _sessions.Values.Where(session => session.Present && session.Active &&
+        _streams = Array.AsReadOnly(_sessions.Values.Where(session => session.Present && session.Active &&
                 !PlaybackIdentity.IsOwnProcess(session.Name))
             .Select(session => new PlaybackStream(session.Key, session.Name, session.ProcessId,
                 session.Normal, session.Actual, session.Target, session.Peak, session.Muted,
                 session.IsSpotify, running && speaking && session.Eligible && !session.Muted &&
                 session.AutomaticReductionApplied && session.Actual < session.Normal,
-                session.Eligible)).ToArray();
+                session.Eligible)).ToArray());
         _errors = errors.Distinct(StringComparer.Ordinal).ToArray();
 
         return read.Enumerated;
@@ -289,7 +317,7 @@ internal sealed class PlaybackSessions(IPlaybackSource source, PlaybackVolumeEve
                 throw new InvalidOperationException("Playback volume cannot be changed while reduction is 100%. Reduce the reduction amount first.");
             if (session.Muted)
                 throw new InvalidOperationException("Playback volume cannot be changed while this audio stream is muted.");
-            if (!session.Active || session.Peak <= AudiblePeak)
+            if (!session.Active || !PlaybackSignal.HasSignal(session.Peak))
                 throw new InvalidOperationException("Playback volume cannot be changed while this audio stream is silent. Resume playback first.");
 
             session.Normal = Math.Clamp(edit.Actual / effectiveGain, 0, 1);
@@ -341,7 +369,7 @@ internal sealed class PlaybackSessions(IPlaybackSource source, PlaybackVolumeEve
             return;
         }
 
-        var audible = session.Active && session.Peak > AudiblePeak;
+        var audible = session.Active && PlaybackSignal.HasSignal(session.Peak);
         var ducking = running && speaking && session.Eligible && settings.ReductionPercent > 0;
 
         if (session.ApplyNormal)
@@ -466,6 +494,7 @@ internal sealed class PlaybackSessions(IPlaybackSource source, PlaybackVolumeEve
 
         public bool Active { get; set; }
         public bool Present { get; set; }
+        public bool Expired { get; set; }
         public bool Muted { get; set; }
         public float Peak { get; set; }
         public bool Eligible { get; set; }
@@ -476,6 +505,9 @@ internal sealed class PlaybackSessions(IPlaybackSource source, PlaybackVolumeEve
 
         public bool ChangedByApp { get; set; }
         public bool RestoreStartup { get; set; }
+        // Core Audio can reactivate the same instance. Keep its baseline and restore
+        // intent, but an expired session has no stream that can be restored now.
+        public bool HasPendingRestoration => RestoreStartup && !Expired;
         public int RestoreMilliseconds { get; set; }
         public bool ApplyNormal { get; set; }
         public bool Automatic { get; set; }
