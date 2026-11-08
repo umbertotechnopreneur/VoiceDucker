@@ -22,8 +22,9 @@ VBWR E -->
         <DesktopAcrylicBackdrop />
     </Window.SystemBackdrop>
 
+    <Grid>
     <SplitView x:Name="SettingsSplitView" PanePlacement="Right" DisplayMode="Inline"
-               OpenPaneLength="520" IsPaneOpen="False">
+               OpenPaneLength="520" IsPaneOpen="False" PaneBackground="Transparent">
         <SplitView.Resources>
             <!-- Derived controls need the explicit current WinUI Slider style. -->
             <Style x:Key="VoiceDuckerSliderStyle" TargetType="controls:ScrollSafeSlider"
@@ -52,7 +53,7 @@ VBWR E -->
                               SelectionChanged="ProfileComboBox_SelectionChanged" AutomationProperties.Name="Manage listening profile" />
                     <TextBlock x:Name="SettingsProfileHintText" TextWrapping="Wrap" FontSize="12" Opacity="0.75" />
                     <TextBox x:Name="ProfileNameBox" Header="Profile name" PlaceholderText="e.g. Talking to AI"
-                             MaxLength="40" AutomationProperties.Name="New or renamed profile name" />
+                             AutomationProperties.Name="New or renamed profile name" />
                     <Grid ColumnSpacing="8">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                         <Button Content="Save as new" Click="SaveProfile_Click" HorizontalAlignment="Stretch" />
@@ -73,7 +74,7 @@ VBWR E -->
                             </Button.Flyout>
                         </Button>
                     </StackPanel>
-                    <TextBlock Text="Includes reduction, fade times and curve, detection settings, other-app playback and hidden apps. Changes are saved to a profile only when you choose Update saved."
+                    <TextBlock Text="Includes reduction, fade times and curve, detection settings and other-app playback. Hidden apps are global and stay hidden when you change profiles. Changes are saved to a profile only when you choose Update saved."
                                TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
                 </StackPanel>
             </Expander>
@@ -91,12 +92,12 @@ VBWR E -->
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Sensitivity" VerticalAlignment="Center" />
-                            <TextBlock x:Name="SensitivityValueText" Grid.Column="1" Text="0 dB"
+                            <TextBlock x:Name="SensitivityValueText" Grid.Column="1"
                                        VerticalAlignment="Center" FontFamily="Consolas" />
                             <Button Grid.Column="2" Content="Reset" Click="SensitivityReset_Click"
-                                    Padding="10,4" AutomationProperties.Name="Reset sensitivity to zero decibels" />
+                                    Padding="10,4" AutomationProperties.Name="Reset microphone sensitivity" />
                         </Grid>
-                        <controls:ScrollSafeSlider x:Name="SensitivitySlider" Minimum="-24" Maximum="36"
+                        <controls:ScrollSafeSlider x:Name="SensitivitySlider"
                                 StepFrequency="1" HorizontalAlignment="Stretch"
                                 Style="{StaticResource VoiceDuckerSliderStyle}" Loaded="SettingSlider_Loaded"
                                 ValueChanged="SensitivitySlider_ValueChanged"
@@ -121,12 +122,12 @@ VBWR E -->
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Detection threshold" VerticalAlignment="Center" />
-                            <TextBlock x:Name="ThresholdValueText" Grid.Column="1" Text="-34.9 dBFS"
+                            <TextBlock x:Name="ThresholdValueText" Grid.Column="1"
                                        VerticalAlignment="Center" FontFamily="Consolas" />
                             <Button Grid.Column="2" Content="Reset" Click="ThresholdReset_Click"
-                                    Padding="10,4" AutomationProperties.Name="Reset detection threshold to minus 34.9 dBFS" />
+                                    Padding="10,4" AutomationProperties.Name="Reset detection threshold" />
                         </Grid>
-                        <controls:ScrollSafeSlider x:Name="ThresholdSlider" Minimum="-60" Maximum="0" Value="-34.9"
+                        <controls:ScrollSafeSlider x:Name="ThresholdSlider"
                                 StepFrequency="0.1" HorizontalAlignment="Stretch"
                                 Style="{StaticResource VoiceDuckerSliderStyle}" Loaded="SettingSlider_Loaded"
                                 ValueChanged="ThresholdSlider_ValueChanged"
@@ -141,12 +142,12 @@ VBWR E -->
                                 <ColumnDefinition Width="130" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Hysteresis (dB)" VerticalAlignment="Center" />
-                            <NumberBox x:Name="HysteresisBox" Grid.Column="1" Minimum="0" Maximum="12"
+                            <NumberBox x:Name="HysteresisBox" Grid.Column="1"
                                        SmallChange="1" SpinButtonPlacementMode="Compact"
                                        Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged"
                                        AutomationProperties.Name="Detection hysteresis in decibels" />
                         </Grid>
-                        <TextBlock Text="Keeps detection active through small dips below the threshold. Default: 3 dB; set 0 to disable."
+                        <TextBlock Text="Keeps detection active through small dips below the threshold. Set to zero to disable."
                                    TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
                         <TextBlock x:Name="ReleaseThresholdText" TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
                     </StackPanel>
@@ -178,19 +179,19 @@ VBWR E -->
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <TextBlock Text="Reduce volume by (%)" VerticalAlignment="Center" />
-                            <NumberBox x:Name="ReductionBox" Grid.Column="1" Minimum="0" Maximum="100"
+                            <NumberBox x:Name="ReductionBox" Grid.Column="1"
                                        SmallChange="1" SpinButtonPlacementMode="Compact"
                                        Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged" />
                             <TextBlock Grid.Row="1" Text="Fade down (ms)" VerticalAlignment="Center" />
-                            <NumberBox x:Name="FadeDownBox" Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="5000"
+                            <NumberBox x:Name="FadeDownBox" Grid.Row="1" Grid.Column="1"
                                        SmallChange="100" SpinButtonPlacementMode="Compact"
                                        Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged" />
                             <TextBlock Grid.Row="2" Text="Wait before fade back (ms)" VerticalAlignment="Center" />
-                            <NumberBox x:Name="RestoreDelayBox" Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="10000"
+                            <NumberBox x:Name="RestoreDelayBox" Grid.Row="2" Grid.Column="1"
                                        SmallChange="100" SpinButtonPlacementMode="Compact"
                                        Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged" />
                             <TextBlock Grid.Row="3" Text="Fade back (ms)" VerticalAlignment="Center" />
-                            <NumberBox x:Name="FadeUpBox" Grid.Row="3" Grid.Column="1" Minimum="0" Maximum="30000"
+                            <NumberBox x:Name="FadeUpBox" Grid.Row="3" Grid.Column="1"
                                        SmallChange="100" SpinButtonPlacementMode="Compact"
                                        Loaded="SettingBox_Loaded" ValueChanged="SettingBox_ValueChanged" />
                         </Grid>
@@ -209,10 +210,15 @@ VBWR E -->
                       HorizontalContentAlignment="Stretch"
                       Expanding="SettingsExpander_Expanding">
                 <StackPanel Spacing="16">
-                    <StackPanel Spacing="8">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
                         <CheckBox x:Name="OtherSourcesCheckBox" Content="Also lower other apps"
-                                  Click="OtherSourcesCheckBox_Click" />
-                        <Button x:Name="HiddenAppsButton" Content="Hidden apps">
+                                  VerticalAlignment="Center" Click="OtherSourcesCheckBox_Click" />
+                        <Button x:Name="HiddenAppsButton" Grid.Column="1" Content="Hidden apps"
+                                VerticalAlignment="Center">
                             <Button.Flyout>
                                 <Flyout>
                                     <StackPanel Width="280" Spacing="12">
@@ -236,7 +242,7 @@ VBWR E -->
                                 </Flyout>
                             </Button.Flyout>
                         </Button>
-                    </StackPanel>
+                    </Grid>
                     <StackPanel Spacing="8">
                         <CheckBox x:Name="StartupCheckBox" Content="Start with Windows"
                                   Click="StartupCheckBox_Click" />
@@ -251,50 +257,24 @@ VBWR E -->
                 </ScrollViewer>
             </Border>
         </SplitView.Pane>
-    <ScrollViewer x:Name="MainScrollViewer" VerticalScrollBarVisibility="Auto"
+    <ScrollViewer x:Name="MainScrollViewer" VerticalScrollBarVisibility="Hidden"
+                  VerticalScrollMode="Enabled" HorizontalContentAlignment="Stretch"
                   HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled">
-
-        <StackPanel x:Name="RootPanel" Padding="22" Spacing="16">
-            <StackPanel.Resources>
-                <Style x:Key="PlaybackLevelMeterStyle" TargetType="ProgressBar">
-                    <Setter Property="Background" Value="{ThemeResource ControlStrongFillColorDefaultBrush}" />
-                </Style>
-            </StackPanel.Resources>
+    <Grid x:Name="RootPanel" Padding="22,0,22,22" RowSpacing="16"
+          MinHeight="{Binding ViewportHeight, ElementName=MainScrollViewer}">
+        <Grid.Resources>
+            <Style x:Key="PlaybackLevelMeterStyle" TargetType="ProgressBar">
+                <Setter Property="Background" Value="{ThemeResource ControlStrongFillColorDefaultBrush}" />
+            </Style>
+        </Grid.Resources>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <StackPanel Spacing="16">
             <InfoBar x:Name="ExistingInstanceNotice" IsOpen="False" IsClosable="True"
                      Severity="Informational" Title="VoiceDucker is already running"
                      Message="Only one instance can run at a time. This is your existing window." />
-            <Grid ColumnSpacing="12" VerticalAlignment="Center">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <Border x:Name="MicStatusBorder" Width="42" Height="42" Background="#263B50"
-                        BorderBrush="#F6A24C" BorderThickness="1" CornerRadius="2">
-                    <Grid>
-                        <FontIcon x:Name="MicStatusIcon" Glyph="&#xE720;" FontFamily="Segoe Fluent Icons"
-                                  FontSize="22" Foreground="#F6A24C" />
-                    </Grid>
-                </Border>
-                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                    <TextBlock Text="VoiceDucker" FontFamily="Consolas" FontSize="23"
-                               FontWeight="Bold" CharacterSpacing="70" />
-                    <TextBlock Text="Focus on your voice. Let your audio step back." FontSize="13" Opacity="0.72" TextWrapping="Wrap" />
-                </StackPanel>
-                <HyperlinkButton Grid.Column="2" Padding="0" VerticalAlignment="Center"
-                                 NavigateUri="https://umbertogiacobbi.biz/vibeware/manifesto"
-                                 AutomationProperties.Name="Participates in VibeWare. Read the manifesto"
-                                 ToolTipService.ToolTip="Participates in VibeWare · Read the manifesto">
-                    <Image Source="Assets/vibeware-logo.png" Width="52" Height="52" Stretch="Uniform" />
-                </HyperlinkButton>
-                <ToggleButton x:Name="SettingsButton" Grid.Column="3" Click="SettingsButton_Click"
-                              VerticalAlignment="Center" AutomationProperties.Name="Settings"
-                              ToolTipService.ToolTip="Settings">
-                    <FontIcon Glyph="&#xE713;" FontFamily="Segoe Fluent Icons" FontSize="20" />
-                </ToggleButton>
-            </Grid>
-
             <Border x:Name="LicensePanel" Visibility="Collapsed" Padding="12" CornerRadius="8"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                 <StackPanel Spacing="8">
@@ -308,8 +288,9 @@ VBWR E -->
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="170" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <Grid Width="164" Height="164">
+                <Grid Width="164" Height="164" VerticalAlignment="Top">
                     <Grid>
                         <Grid.RenderTransform>
                             <ScaleTransform x:Name="MixerScale" CenterX="82" CenterY="82" />
@@ -334,6 +315,19 @@ VBWR E -->
                         <Border x:Name="Bar5" Width="5" Height="6" Background="#F6A24C" CornerRadius="2" />
                     </StackPanel>
                 </Grid>
+                    <ToggleButton x:Name="SettingsButton" Grid.Column="2" Click="SettingsButton_Click"
+                                  Background="Transparent" BorderThickness="0" Padding="4"
+                                  MinWidth="28" MinHeight="28" VerticalAlignment="Top"
+                                  AutomationProperties.Name="Settings" ToolTipService.ToolTip="Settings">
+                        <ToggleButton.Resources>
+                            <SolidColorBrush x:Key="ToggleButtonBackgroundPointerOver" Color="Transparent" />
+                            <SolidColorBrush x:Key="ToggleButtonBackgroundPressed" Color="Transparent" />
+                            <SolidColorBrush x:Key="ToggleButtonBackgroundChecked" Color="Transparent" />
+                            <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPointerOver" Color="Transparent" />
+                            <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPressed" Color="Transparent" />
+                        </ToggleButton.Resources>
+                        <FontIcon Glyph="&#xE713;" FontFamily="Segoe Fluent Icons" FontSize="20" />
+                    </ToggleButton>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="9">
                     <TextBlock x:Name="VisualStateText" Text="MIC OFF" FontFamily="Consolas"
                                FontSize="17" FontWeight="SemiBold" />
@@ -341,7 +335,6 @@ VBWR E -->
                                TextWrapping="Wrap" FontSize="13" />
                     <TextBlock x:Name="MicrophoneNameText" Text="Microphone: Windows default"
                                TextWrapping="Wrap" FontSize="12" Opacity="0.72" />
-                    <TextBlock Text="Audio stays on your device." FontSize="12" Opacity="0.65" />
                 </StackPanel>
             </Grid>
 
@@ -365,19 +358,19 @@ VBWR E -->
                     </Border>
                     <Grid IsHitTestVisible="False">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition x:Name="ThresholdBeforeColumn" Width="0.4184*" />
-                            <ColumnDefinition x:Name="ThresholdAfterColumn" Width="0.5816*" />
+                            <ColumnDefinition x:Name="ThresholdBeforeColumn" />
+                            <ColumnDefinition x:Name="ThresholdAfterColumn" />
                         </Grid.ColumnDefinitions>
                         <Border Grid.Column="1" Width="2" HorizontalAlignment="Left" Background="#FFF4DC"
                                 ToolTipService.ToolTip="Sound above this threshold lowers playback" />
                     </Grid>
                 </Grid>
                 <Grid>
-                    <TextBlock Text="-60" FontFamily="Consolas" FontSize="11" Opacity="0.65" />
-                    <TextBlock x:Name="MicrophoneThresholdText" Text="Threshold -34.9 dBFS"
+                    <TextBlock x:Name="MicrophoneMeterMinimumText" FontFamily="Consolas" FontSize="11" Opacity="0.65" />
+                    <TextBlock x:Name="MicrophoneThresholdText"
                                ToolTipService.ToolTip="Adjust Detection threshold in Microphone &amp; detection"
                                HorizontalAlignment="Center" FontFamily="Consolas" FontSize="11" Opacity="0.8" />
-                    <TextBlock Text="0 dBFS" HorizontalAlignment="Right" FontFamily="Consolas"
+                    <TextBlock x:Name="MicrophoneMeterMaximumText" HorizontalAlignment="Right" FontFamily="Consolas"
                                FontSize="11" Opacity="0.65" />
                 </Grid>
                 <TextBlock x:Name="MicrophoneLevelHint" Text="Press Enable to see your microphone level."
@@ -385,53 +378,62 @@ VBWR E -->
             </StackPanel>
 
             <StackPanel Spacing="4">
-                <ComboBox x:Name="ProfileComboBox" Header="Listening profile" DisplayMemberPath="Name"
-                          HorizontalAlignment="Stretch" SelectionChanged="ProfileComboBox_SelectionChanged"
-                          AutomationProperties.Name="Listening profile" />
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Listening profile" VerticalAlignment="Center" />
+                    <ComboBox x:Name="ProfileComboBox" Grid.Column="1" DisplayMemberPath="Name"
+                              HorizontalAlignment="Stretch" SelectionChanged="ProfileComboBox_SelectionChanged"
+                              AutomationProperties.Name="Listening profile" />
+                </Grid>
                 <TextBlock x:Name="ProfileHintText" FontSize="12" Opacity="0.68" TextWrapping="Wrap" />
             </StackPanel>
 
-            <Button x:Name="ToggleButton" Click="ToggleButton_Click"
-                    HorizontalAlignment="Stretch" MinHeight="46"
-                    Background="#346A9C" Foreground="#FFF4DC">
-                <StackPanel Orientation="Horizontal" Spacing="10">
-                    <FontIcon x:Name="ToggleButtonIcon" Glyph="&#xE768;"
-                              FontFamily="Segoe Fluent Icons" FontSize="16" />
-                    <TextBlock x:Name="ToggleButtonLabel" Text="Enable" />
-                </StackPanel>
-            </Button>
-
-            <StackPanel Spacing="6">
-                <Button x:Name="PauseButton" Content="Pause monitoring…" HorizontalAlignment="Stretch"
-                        ToolTipService.ToolTip="Temporarily turn off the microphone and restore startup volumes">
-                    <Button.Flyout>
-                        <MenuFlyout>
-                            <MenuFlyoutItem Text="Pause for 5 minutes" Click="Pause5_Click" />
-                            <MenuFlyoutItem Text="Pause for 15 minutes" Click="Pause15_Click" />
-                            <MenuFlyoutItem Text="Pause for 30 minutes" Click="Pause30_Click" />
-                        </MenuFlyout>
-                    </Button.Flyout>
-                </Button>
-                <Border x:Name="PausedPanel" Visibility="Collapsed" Padding="12" CornerRadius="6"
-                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-                    <StackPanel Spacing="8">
-                        <Grid ColumnSpacing="8">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                            <TextBlock x:Name="PauseCountdownText" VerticalAlignment="Center" FontFamily="Consolas" />
-                            <Button x:Name="ResumeButton" Grid.Column="1" Content="Resume now" Click="Resume_Click" />
-                        </Grid>
-                        <TextBlock Text="Microphone off. Monitoring resumes when the timer ends. Disable cancels the timer."
-                                   TextWrapping="Wrap" FontSize="12" Opacity="0.75" />
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Button x:Name="ToggleButton" Click="ToggleButton_Click"
+                        HorizontalAlignment="Stretch" MinHeight="46"
+                        Background="#346A9C" Foreground="#FFF4DC">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <FontIcon x:Name="ToggleButtonIcon" Glyph="&#xE768;"
+                                  FontFamily="Segoe Fluent Icons" FontSize="16" />
+                        <TextBlock x:Name="ToggleButtonLabel" Text="Enable" />
                     </StackPanel>
-                </Border>
-            </StackPanel>
+                </Button>
+                <Button x:Name="PauseButton" Grid.Column="1" Width="46" Height="46"
+                        Margin="8,0,0,0" Padding="0" VerticalAlignment="Center"
+                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                        AutomationProperties.Name="Pause monitoring"
+                        AutomationProperties.HelpText="Pause microphone monitoring, then resume automatically."
+                        ToolTipService.ToolTip="Pause microphone monitoring, then resume automatically.">
+                    <FontIcon Glyph="&#xE769;" FontFamily="Segoe Fluent Icons" FontSize="16"
+                              AutomationProperties.AccessibilityView="Raw" />
+                </Button>
+            </Grid>
+            <Border x:Name="PausedPanel" Visibility="Collapsed" Padding="12" CornerRadius="6"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                <StackPanel Spacing="8">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <TextBlock x:Name="PauseCountdownText" VerticalAlignment="Center" FontFamily="Consolas" />
+                        <Button x:Name="ResumeButton" Grid.Column="1" Content="Resume now" Click="Resume_Click" />
+                    </Grid>
+                    <TextBlock Text="Microphone off. Monitoring resumes when the timer ends. Disable cancels the timer."
+                               TextWrapping="Wrap" FontSize="12" Opacity="0.75" />
+                </StackPanel>
+            </Border>
 
             <Expander x:Name="AudioStreamsExpander" Header="Active audio streams"
                       IsExpanded="True" MinHeight="40" Padding="12" HorizontalAlignment="Stretch"
                       HorizontalContentAlignment="Stretch">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="Sliders show the current playback volume and follow automatic lowering. Normal is the level restored when sound detection ends. Spotify is included by default."
+                    <TextBlock Text="Sliders show current volume; Normal is the level after speech. Each orange meter shows its session's output. Choose which apps to lower in Apps &amp; startup."
                                TextWrapping="Wrap" FontSize="12" Opacity="0.68" />
                     <StackPanel x:Name="StreamRows" Spacing="8" />
                     <TextBlock x:Name="NoStreamsText" Text="No apps playing audio right now."
@@ -441,41 +443,15 @@ VBWR E -->
 
             <TextBlock x:Name="FeedbackText" TextWrapping="Wrap" FontSize="12" />
 
-            <Border Background="Transparent" PointerEntered="Footer_PointerEntered"
-                    PointerExited="Footer_PointerExited" GotFocus="Footer_GotFocus">
-            <StackPanel x:Name="FooterLinks" Spacing="12">
-            <Grid ColumnSpacing="16" RowSpacing="8">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <StackPanel x:Name="FooterPurchasePanel" Grid.ColumnSpan="2" Visibility="Collapsed"
+        </StackPanel>
+            <StackPanel Grid.Row="1" Spacing="12">
+                <StackPanel x:Name="FooterPurchasePanel" Visibility="Collapsed"
                             Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <TextBlock x:Name="FooterTrialText" Text="You're using the trial version"
                                FontSize="11" VerticalAlignment="Center" />
                     <HyperlinkButton Content="Purchase" Padding="0" FontSize="12"
                                      Click="Purchase_Click" />
                 </StackPanel>
-                <StackPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Right"
-                            VerticalAlignment="Center" Orientation="Horizontal" Spacing="12">
-                    <StackPanel VerticalAlignment="Center" Spacing="2">
-                    <TextBlock Text="This is VibeWare" FontSize="12"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <HyperlinkButton NavigateUri="https://umbertogiacobbi.biz/vibeware/manifesto"
-                                     Content="Manifesto" HorizontalAlignment="Left"
-                                     Padding="0" MinHeight="0" FontSize="12" AutomationProperties.Name="Read the VibeWare manifesto" />
-                    </StackPanel>
-                    <HyperlinkButton NavigateUri="https://github.com/umbertotechnopreneur/VibeWare"
-                                     Padding="0" AutomationProperties.Name="VibeWare on GitHub">
-                        <Image Source="ms-appx:///Assets/vibeware-logo.png" Width="96" Stretch="Uniform"
-                               AutomationProperties.Name="VibeWare logo" />
-                    </HyperlinkButton>
-                </StackPanel>
-            </Grid>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
                 <Button Content="About VoiceDucker" Click="AboutButton_Click"
                         Background="Transparent" BorderThickness="0" Padding="0" FontSize="12" />
@@ -487,8 +463,19 @@ VBWR E -->
                                  Padding="0" FontSize="12" />
             </StackPanel>
             </StackPanel>
-            </Border>
-        </StackPanel>
+    </Grid>
     </ScrollViewer>
     </SplitView>
+    <!-- Canvas keeps the branding out of content measurement and scrolling. -->
+    <Canvas Width="0" Height="0" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+        <Border Canvas.Left="-128" Canvas.Top="-112" Width="112" Height="96" Padding="8">
+            <HyperlinkButton NavigateUri="https://github.com/umbertotechnopreneur/VibeWare"
+                             Padding="0" MinWidth="0" MinHeight="0"
+                             AutomationProperties.Name="VibeWare on GitHub">
+                <Image Source="ms-appx:///Assets/vibeware-logo.png" Width="96" Stretch="Uniform"
+                       AutomationProperties.Name="VibeWare logo" />
+            </HyperlinkButton>
+        </Border>
+    </Canvas>
+    </Grid>
 </Window>

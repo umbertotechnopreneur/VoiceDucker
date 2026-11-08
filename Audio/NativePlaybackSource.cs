@@ -25,7 +25,7 @@ internal sealed class NativePlaybackSource(PlaybackVolumeEvents volumeEvents) : 
     {
         var observations = new List<PlaybackObservation>();
         var errors = new List<string>();
-        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var sessionExpiry = new Dictionary<string, bool>(StringComparer.Ordinal);
 
         try
         {
@@ -41,15 +41,17 @@ internal sealed class NativePlaybackSource(PlaybackVolumeEvents volumeEvents) : 
                             try
                             {
                                 var session = sessions[index];
-                                if (session.State == AudioSessionState.AudioSessionStateExpired) continue;
-
-                                var key = endpoint.ID + ":" + session.GetSessionInstanceIdentifier;
-                                seen.Add(key);
+                                var state = session.State;
+                                var endpointId = endpoint.ID;
+                                var instanceId = session.GetSessionInstanceIdentifier;
+                                var key = endpointId + ":" + instanceId;
+                                var expired = state == AudioSessionState.AudioSessionStateExpired;
+                                sessionExpiry[key] = expired;
+                                if (expired) continue;
 
                                 if (!_connections.ContainsKey(key))
                                 {
-                                    _connections.Add(key, NativePlaybackSession.Open(endpoint.ID,
-                                        session.GetSessionInstanceIdentifier, volumeEvents));
+                                    _connections.Add(key, NativePlaybackSession.Open(endpointId, instanceId, volumeEvents));
                                     AudioDiagnostics.Write(() => $"volume-events-subscribed session={key}");
                                 }
 
@@ -60,7 +62,7 @@ internal sealed class NativePlaybackSource(PlaybackVolumeEvents volumeEvents) : 
                                 var volume = session.SimpleAudioVolume;
                                 observations.Add(new PlaybackObservation(key, name, processId,
                                     volume.Volume, session.AudioMeterInformation.MasterPeakValue,
-                                    volume.Mute, session.State == AudioSessionState.AudioSessionStateActive));
+                                    volume.Mute, state == AudioSessionState.AudioSessionStateActive));
                             }
                             catch (Exception exception)
                             {
@@ -78,14 +80,27 @@ internal sealed class NativePlaybackSource(PlaybackVolumeEvents volumeEvents) : 
         catch (Exception exception)
         {
             errors.Add($"Playback devices could not be enumerated: {exception.Message}");
-            return new PlaybackReadResult(observations, errors, false);
+            return new PlaybackReadResult(observations, errors, false, sessionExpiry);
         }
 
-        foreach (var key in _connections.Keys.Where(key => !seen.Contains(key)).ToArray())
+        foreach (var key in _connections.Keys
+                     .Where(key => !sessionExpiry.TryGetValue(key, out var expired) || expired).ToArray())
         {
+            var connection = _connections[key];
             try
             {
-                _connections[key].Dispose();
+                // An omitted session can still report its state before its subscription is released.
+                if (!sessionExpiry.ContainsKey(key) && connection.ReadExpiry() is { } expired)
+                    sessionExpiry.Add(key, expired);
+            }
+            catch (Exception exception)
+            {
+                errors.Add($"A playback session is unavailable: {exception.Message}");
+            }
+
+            try
+            {
+                connection.Dispose();
             }
             catch (Exception exception)
             {
@@ -97,7 +112,7 @@ internal sealed class NativePlaybackSource(PlaybackVolumeEvents volumeEvents) : 
             }
         }
 
-        return new PlaybackReadResult(observations, errors, errors.Count == 0);
+        return new PlaybackReadResult(observations, errors, errors.Count == 0, sessionExpiry);
     }
 
     /// <summary>Reads the current scalar from an existing native session connection.</summary>

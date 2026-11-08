@@ -1,5 +1,6 @@
 // VoiceDucker - Copyright (c) 2026 Umberto Giacobbi. MIT license.
 
+using System.Collections.Immutable;
 using Microsoft.UI.Xaml;
 using VoiceDucker.Audio;
 using VoiceDucker.Licensing;
@@ -138,10 +139,8 @@ internal sealed partial class VoiceDuckerModel : IDisposable
     /// <summary>Validates a numeric edit and applies it to the matching immutable preference.</summary>
     public void SetNumericSetting(SettingKey key, double value)
     {
-        var requiresWholeNumber = key != SettingKey.ThresholdDecibels;
-
-        if (!double.IsFinite(value) || (requiresWholeNumber && value != Math.Round(value)) ||
-            value < int.MinValue || value > int.MaxValue)
+        if (!DuckingSettings.IsInNumericRange(key, value) ||
+            (key != SettingKey.ThresholdDecibels && value != Math.Truncate(value)))
         {
             ReportViewError("Enter a number within the setting's allowed range.");
             return;
@@ -230,7 +229,7 @@ internal sealed partial class VoiceDuckerModel : IDisposable
                 : settings.BlacklistedProcesses.Where(item => !PlaybackIdentity.NormalizeProcessName(item)
                     .Equals(name, StringComparison.OrdinalIgnoreCase));
 
-            var uniqueProcesses = processes.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            var uniqueProcesses = processes.Distinct(StringComparer.OrdinalIgnoreCase).ToImmutableArray();
 
             return settings with { BlacklistedProcesses = uniqueProcesses };
         });
@@ -290,6 +289,17 @@ internal sealed partial class VoiceDuckerModel : IDisposable
 
     /// <summary>Publishes a view or adapter error without changing active audio preferences.</summary>
     public void ReportViewError(string message) => Change(state => state with { Feedback = message });
+
+    /// <summary>
+    /// Stops the audio worker directly from the memory guard, without waiting for a blocked UI.
+    /// Worker disposal retains the existing bounded restoration and resource-release path.
+    /// </summary>
+    internal bool StopAudioForMemoryRecovery()
+    {
+        _engine.StatusChanged -= OnAudioChanged;
+        _engine.Dispose();
+        return _engine.ShutdownRestorationConfirmed;
+    }
 
     /// <summary>Loads window geometry through the model's persistence adapter.</summary>
     public WindowPlacementState? LoadWindowPlacement() => WindowPlacementStore.Load();

@@ -10,6 +10,10 @@
     }
   ],
   "packages": {
+    "Microsoft.NETCore.App.Runtime.win-x64/10.0.14": {
+      "source": "https://api.nuget.org/v3/index.json",
+      "sha256": "a3ea61b4a2da6d28e562dd1cdacf80eb4dd6b9727b0a2b47f9d6aba90dbbcb1f"
+    },
     "Microsoft.NETCore.App.Runtime.win-x64/10.0.13": {
       "source": "https://api.nuget.org/v3/index.json",
       "sha256": "c66885d464697be75676b4d1fbca38b8806f3af01d65d27205b3f06add094444"

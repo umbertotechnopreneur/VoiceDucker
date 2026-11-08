@@ -120,13 +120,17 @@ namespace VoiceDucker.Audio
     internal sealed record MicrophoneChoice(string Id, string Name);
     internal sealed record PlaybackStream(string Key, string Name, int ProcessId,
         float NormalVolume, float ActualVolume, float TargetVolume, float Peak,
-        bool Muted, bool IsSpotify, bool IsLowered, bool IsEligible);
+        bool Muted, bool IsSpotify, bool IsLowered, bool IsEligible)
+    {
+        public bool HasAudibleSignal => float.IsFinite(Peak) && Peak > 0.001f;
+    }
     internal sealed class DuckingEngine : IDisposable
     {
         public static DuckingEngine Last = null!;
         public DuckingSettings Settings;
         public EngineStatus State { get; private set; }
         public bool Disposed;
+        public bool ShutdownRestorationConfirmed => Disposed;
         public int MonitoringCalls;
         public int RefreshMicrophoneCalls;
         public int SettingsCalls;
@@ -155,9 +159,11 @@ namespace VoiceDucker.Audio
             Publish(State with { Ready = true, Microphones = [new("", "Fake default"), new("mic-b", "Fake B")] });
             return Task.CompletedTask;
         }
-        public async Task SetMonitoringAsync(bool enabled)
+        public async Task SetMonitoringAsync(bool enabled, bool resumeFromPause = false)
         {
             if (enabled && !State.Ready) throw new InvalidOperationException("capture before snapshot");
+            if (enabled && resumeFromPause && (State.Restoring || State.Error is not null))
+                throw new InvalidOperationException("playback restoration pending");
             MonitoringCalls++;
             ActiveCommands++;
             MaximumConcurrentCommands = Math.Max(MaximumConcurrentCommands, ActiveCommands);
@@ -487,7 +493,7 @@ Check(disposable.Current == previous, "A disposed model still accepted audio cal
 
 var projectionSettings = new DuckingSettings(50) { ThresholdDecibels = -30, HysteresisDecibels = 6 };
 var detection = new GateState(DetectionPhase.AboveThreshold, true, 0.1, -20, -30, -36, 5);
-var audio = new EngineStatus(true, true, true, 1, detection, "Fake active microphone",
+var audio = new EngineStatus(true, true, true, 1, projectionSettings.ReductionPercent, detection, "Fake active microphone",
     [new("spotify", "Spotify", 1, 0.72f, 0.36f, 0.36f, 0.01f, false, true, true, true),
      new("browser", "Browser", 2, 0.5f, 0.5f, 0.5f, 0.1f, true, false, false, true),
      new("self", "VoiceDucker.exe", 3, 1, 1, 1, 1, false, false, false, false)],
@@ -505,7 +511,10 @@ Check(row.VolumeText.Contains("Volume 36%") && row.VolumeText.Contains("Normal 7
     "The playback row did not identify actual volume and its separate normal reference.");
 Check(row.VolumeHelp.Contains("50%"),
     "The playback row did not explain the actual-volume ceiling during 50 percent ducking.");
-Check((view with { Settings = projectionSettings with { ReductionPercent = 80 } }).PlaybackRows[0]
+var pendingReduction = view with { Settings = projectionSettings with { ReductionPercent = 80 } };
+Check(pendingReduction.PlaybackRows[0].VolumeHelp.Contains("50%"),
+    "The playback row used a reduction the audio worker had not applied.");
+Check((pendingReduction with { Audio = audio with { ReductionPercent = 80 } }).PlaybackRows[0]
         .VolumeHelp.Contains("20%"),
     "The actual-volume help confused an 80 percent reduction with its 20 percent output ceiling.");
 Check(Math.Abs(row.SignalPercent - 18.543416692242918) < 0.0001 && row.CanEdit,
@@ -563,6 +572,7 @@ var fullyLowered = view with
     Settings = projectionSettings with { ReductionPercent = 100 },
     Audio = audio with
     {
+        ReductionPercent = 100,
         Streams =
         [
             new("lowered", "Spotify", 1, .72f, 0, 0, .4f, false, true, true, true),
@@ -578,7 +588,7 @@ Check(fullyLowered.PlaybackRows.Single(stream => stream.Key == "other").CanEdit,
 Check((fullyLowered with { Audio = fullyLowered.Audio with { Speaking = false } }).PlaybackRows
         .Single(stream => stream.Key == "lowered").CanEdit,
     "A 100 percent reduction disabled the volume cursor after detection released.");
-Check((fullyLowered with { Settings = projectionSettings with { ReductionPercent = 99 } }).PlaybackRows
+Check((fullyLowered with { Audio = fullyLowered.Audio with { ReductionPercent = 99 } }).PlaybackRows
         .Single(stream => stream.Key == "lowered").CanEdit,
     "A nonzero automatic gain was treated as an uninvertible zero-gain session.");
 

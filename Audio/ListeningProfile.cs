@@ -5,9 +5,13 @@ namespace VoiceDucker.Audio;
 /// <summary>A named, manually applied set of audio preferences, independent of capture and startup.</summary>
 internal sealed record ListeningProfile(string Id, string Name, ListeningPreferences Preferences)
 {
-    public bool IsValid => Guid.TryParse(Id, out _) && !string.IsNullOrWhiteSpace(Name) &&
-        Name == Name.Trim() && Name.Length <= 40 && !Name.Any(char.IsControl) &&
+    public const int MaxNameLength = 40;
+
+    public bool IsValid => Guid.TryParse(Id, out _) && IsValidName(Name) &&
         Preferences is not null && Preferences.IsValid;
+
+    public static bool IsValidName(string? name) => !string.IsNullOrWhiteSpace(name) &&
+        name.Length <= MaxNameLength && name == name.Trim() && !name.Any(char.IsControl);
 }
 
 /// <summary>Always-available starting points. Personal profiles are saved separately and never replaced.</summary>
@@ -28,20 +32,19 @@ internal static class ListeningPresets
 
     private static ListeningProfile Create(string id, string name, int reduction, int fadeDown, int wait, int fadeUp) =>
         new(id, name, new ListeningPreferences(reduction, fadeDown, fadeUp, wait,
-            DuckingSettings.DefaultThresholdDecibels, 3, 0, false, true, []));
+            DuckingSettings.DefaultThresholdDecibels, 3, 0, true, true));
 }
 
-/// <summary>Only listening choices belong to a profile; device, runtime volumes and startup do not.</summary>
+/// <summary>Only listening choices belong to a profile; exclusions, device, runtime volumes and startup do not.</summary>
 internal sealed record ListeningPreferences(int ReductionPercent, int FadeDownMilliseconds,
     int FadeUpMilliseconds, int RestoreDelayMilliseconds, double ThresholdDecibels,
     int HysteresisDecibels, int MicrophoneGainDecibels, bool IncludeOtherSources,
-    bool SmoothTransitions, string[] BlacklistedProcesses)
+    bool SmoothTransitions)
 {
     public static ListeningPreferences Capture(DuckingSettings settings) => new(
         settings.ReductionPercent, settings.FadeDownMilliseconds, settings.FadeUpMilliseconds,
         settings.RestoreDelayMilliseconds, settings.ThresholdDecibels, settings.HysteresisDecibels,
-        settings.MicrophoneGainDecibels, settings.IncludeOtherSources, settings.SmoothTransitions,
-        settings.BlacklistedProcesses.ToArray());
+        settings.MicrophoneGainDecibels, settings.IncludeOtherSources, settings.SmoothTransitions);
 
     public DuckingSettings ApplyTo(DuckingSettings settings) => settings with
     {
@@ -53,17 +56,10 @@ internal sealed record ListeningPreferences(int ReductionPercent, int FadeDownMi
         HysteresisDecibels = HysteresisDecibels,
         MicrophoneGainDecibels = MicrophoneGainDecibels,
         IncludeOtherSources = IncludeOtherSources,
-        SmoothTransitions = SmoothTransitions,
-        BlacklistedProcesses = BlacklistedProcesses.ToArray()
+        SmoothTransitions = SmoothTransitions
     };
 
-    public bool Matches(DuckingSettings settings)
-    {
-        var current = Capture(settings);
-        return (this with { BlacklistedProcesses = current.BlacklistedProcesses }) == current &&
-            BlacklistedProcesses.SequenceEqual(current.BlacklistedProcesses, StringComparer.OrdinalIgnoreCase);
-    }
+    public bool Matches(DuckingSettings settings) => this == Capture(settings);
 
-    public bool IsValid => BlacklistedProcesses is not null &&
-        ApplyTo(new DuckingSettings()).IsValid;
+    public bool IsValid => ApplyTo(new DuckingSettings()).IsValid;
 }

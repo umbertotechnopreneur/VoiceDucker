@@ -41,6 +41,7 @@ internal sealed class DuckingEngine : IDisposable
     private bool _running;
     private bool _exit;
     private bool _workerStopped;
+    private bool _shutdownRestorationConfirmed;
 
     #endregion
 
@@ -67,6 +68,9 @@ internal sealed class DuckingEngine : IDisposable
     /// <summary>The most recently published immutable worker snapshot.</summary>
     public EngineStatus State => Volatile.Read(ref _state);
 
+    /// <summary>True only after shutdown confirms that no owned playback restoration is pending.</summary>
+    public bool ShutdownRestorationConfirmed => Volatile.Read(ref _shutdownRestorationConfirmed);
+
     #endregion
 
     #region Public methods
@@ -86,16 +90,24 @@ internal sealed class DuckingEngine : IDisposable
     });
 
     /// <summary>Serializes capture start/stop and requests startup-volume restoration when disabled.</summary>
-    public Task SetMonitoringAsync(bool enabled) => Enqueue(() =>
+    public Task SetMonitoringAsync(bool enabled, bool resumeFromPause = false) => Enqueue(() =>
     {
         if (enabled)
         {
             if (!_ready) throw new InvalidOperationException("Playback initialization has not completed.");
             if (_running) return;
 
+            var playback = _playback!;
+            // Check current session lifetimes on the worker before Enable clears restore intent.
+            if (resumeFromPause && (!playback.Update(false, false, _settings) ||
+                playback.HasPendingRestoration || playback.Errors.Count > 0 || _error is not null))
+            {
+                throw new InvalidOperationException("Monitoring remains off. Resolve the audio or restoration error, then press Enable.");
+            }
+
             _error = null;
             StartCapture();
-            _playback!.MonitoringEnabled();
+            playback.MonitoringEnabled();
         }
         else
         {
@@ -446,10 +458,12 @@ internal sealed class DuckingEngine : IDisposable
     /// <summary>Refreshes device choices while retaining an explicit unavailable selection for the user.</summary>
     private void RefreshMicrophones()
     {
-        _microphones = MicrophoneDevices.GetChoices().ToArray();
-        if (!_microphones.Any(choice => choice.Id == _settings.MicrophoneDeviceId))
-            _microphones = _microphones.Append(new MicrophoneChoice(_settings.MicrophoneDeviceId,
-                "Unavailable microphone — choose another input")).ToArray();
+        var choices = MicrophoneDevices.GetChoices().ToList();
+        if (!choices.Any(choice => choice.Id == _settings.MicrophoneDeviceId))
+            choices.Add(new MicrophoneChoice(_settings.MicrophoneDeviceId,
+                "Unavailable microphone — choose another input"));
+
+        _microphones = choices.AsReadOnly();
 
         if (!_running)
             _microphoneName = _microphones.First(choice => choice.Id == _settings.MicrophoneDeviceId).Name;
@@ -464,7 +478,7 @@ internal sealed class DuckingEngine : IDisposable
         var streams = _playback?.Streams ?? [];
         var affectedSessions = streams.Count(stream => stream.IsLowered);
         var state = new EngineStatus(_ready, _running, _running && _detection.Speaking,
-            affectedSessions, _detection, _microphoneName, streams, _microphones,
+            affectedSessions, _settings.ReductionPercent, _detection, _microphoneName, streams, _microphones,
             errors.Length == 0 ? null : string.Join(" ", errors), _playback?.HasPendingRestoration == true);
 
         if (state.Running != _state.Running || state.Speaking != _state.Speaking)
@@ -493,6 +507,7 @@ internal sealed class DuckingEngine : IDisposable
     /// </summary>
     private void ShutdownAudio()
     {
+        var restorationConfirmed = true;
         StopCapture();
         if (_playback is not null)
         {
@@ -509,12 +524,16 @@ internal sealed class DuckingEngine : IDisposable
                 } while (Environment.TickCount64 < deadline);
 
                 if (_playback.HasPendingRestoration)
+                {
+                    restorationConfirmed = false;
                     _error = _playback.RestorationError;
+                }
 
                 AudioDiagnostics.Write(() => $"engine-stop result={(_playback.HasPendingRestoration ? "restoration-unconfirmed" : "restoration-complete")}");
             }
             catch (Exception exception)
             {
+                restorationConfirmed = false;
                 _error = $"Audio restoration failed: {exception.Message}";
             }
             finally
@@ -531,6 +550,7 @@ internal sealed class DuckingEngine : IDisposable
         }
 
         _ready = false;
+        Volatile.Write(ref _shutdownRestorationConfirmed, restorationConfirmed);
         Publish();
     }
 

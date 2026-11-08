@@ -13,7 +13,21 @@
  * License: MIT - see LICENSE
  * VBWR E */
 
+using System.Collections.Immutable;
+
 namespace VoiceDucker.Audio;
+
+/// <summary>Identifies a numeric audio preference for validation and editing.</summary>
+internal enum SettingKey
+{
+    ReductionPercent,
+    FadeDownMilliseconds,
+    FadeUpMilliseconds,
+    RestoreDelayMilliseconds,
+    HysteresisDecibels,
+    SensitivityDecibels,
+    ThresholdDecibels
+}
 
 /// <summary>
 /// Immutable user preferences consumed together by detection and playback control.
@@ -23,7 +37,7 @@ internal sealed record DuckingSettings(
     int ReductionPercent = 90,
     int FadeDownMilliseconds = 300,
     int FadeUpMilliseconds = 2000,
-    bool IncludeOtherSources = false)
+    bool IncludeOtherSources = true)
 {
     #region Defaults and preferences
 
@@ -39,13 +53,13 @@ internal sealed record DuckingSettings(
 
     public int RestoreDelayMilliseconds { get; init; } = 650;
 
-    public string[] BlacklistedProcesses { get; init; } = [];
+    public ImmutableArray<string> BlacklistedProcesses { get; init; } = [];
 
     public string LastSettingsSection { get; init; } = string.Empty;
 
     public bool SmoothTransitions { get; init; } = true;
 
-    public ListeningProfile[] Profiles { get; init; } = [];
+    public ImmutableArray<ListeningProfile> Profiles { get; init; } = [];
 
     public string SelectedProfileId { get; init; } = ListeningPresets.DefaultId;
 
@@ -70,23 +84,42 @@ internal sealed record DuckingSettings(
 
     #region Validation
 
+    public static (double Minimum, double Maximum) GetNumericRange(SettingKey key) => key switch
+    {
+        SettingKey.ReductionPercent => (0, 100),
+        SettingKey.FadeDownMilliseconds => (0, 5000),
+        SettingKey.FadeUpMilliseconds => (0, 30000),
+        SettingKey.RestoreDelayMilliseconds => (0, 10000),
+        SettingKey.HysteresisDecibels => (0, 12),
+        SettingKey.SensitivityDecibels => (-24, 36),
+        SettingKey.ThresholdDecibels => (-60, 0),
+        _ => throw new ArgumentOutOfRangeException(nameof(key))
+    };
+
+    public static bool IsInNumericRange(SettingKey key, double value)
+    {
+        var (minimum, maximum) = GetNumericRange(key);
+        return value >= minimum && value <= maximum;
+    }
+
     /// <summary>Checks all settings before they enter the worker or saved state.</summary>
-    public bool IsValid => double.IsFinite(ThresholdDecibels) && ThresholdDecibels is >= -60 and <= 0 &&
-                           HysteresisDecibels is >= 0 and <= 12 &&
-                           MicrophoneGainDecibels is >= -24 and <= 36 && ReductionPercent is >= 0 and <= 100 &&
+    public bool IsValid => IsInNumericRange(SettingKey.ThresholdDecibels, ThresholdDecibels) &&
+                           IsInNumericRange(SettingKey.HysteresisDecibels, HysteresisDecibels) &&
+                           IsInNumericRange(SettingKey.SensitivityDecibels, MicrophoneGainDecibels) &&
+                           IsInNumericRange(SettingKey.ReductionPercent, ReductionPercent) &&
                            MicrophoneDeviceId is not null &&
-                           RestoreDelayMilliseconds is >= 0 and <= 10000 &&
-                           FadeDownMilliseconds is >= 0 and <= 5000 &&
-                           FadeUpMilliseconds is >= 0 and <= 30000 &&
+                           IsInNumericRange(SettingKey.RestoreDelayMilliseconds, RestoreDelayMilliseconds) &&
+                           IsInNumericRange(SettingKey.FadeDownMilliseconds, FadeDownMilliseconds) &&
+                           IsInNumericRange(SettingKey.FadeUpMilliseconds, FadeUpMilliseconds) &&
                            LastSettingsSection is "" or "microphone" or "volume" or "apps" or "profiles" &&
-                           Profiles is not null && Profiles.Length <= 32 &&
+                           !Profiles.IsDefault && Profiles.Length <= 32 &&
                            Profiles.All(profile => profile is not null && profile.IsValid) &&
                            Profiles.Select(profile => profile.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() == Profiles.Length &&
                            Profiles.Select(profile => profile.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() == Profiles.Length &&
                            SelectedProfileId is not null && (SelectedProfileId.Length == 0 ||
                                ListeningPresets.Find(SelectedProfileId) is not null ||
                                Profiles.Any(profile => profile.Id == SelectedProfileId)) &&
-                           BlacklistedProcesses is not null &&
+                           !BlacklistedProcesses.IsDefault &&
                            BlacklistedProcesses.All(name => !string.IsNullOrWhiteSpace(name));
 
     #endregion

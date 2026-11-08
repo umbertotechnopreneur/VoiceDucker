@@ -93,6 +93,15 @@ internal sealed class NativePlaybackSession : IDisposable
         }
     }
 
+    /// <summary>Reads the session lifetime state, leaving inaccessible controls unclassified.</summary>
+    public bool? ReadExpiry()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _control.GetState(out var state) == 0
+            ? state == AudioSessionState.AudioSessionStateExpired
+            : null;
+    }
+
     /// <summary>Clamps and tags a session-volume write, skipping an already-matching native value.</summary>
     public void SetVolume(float volume, Guid eventContext)
     {

@@ -15,6 +15,20 @@ public sealed partial class MainWindow
 {
     #region Implementation
 
+    private void ConfigureNumericControls()
+    {
+        (SensitivitySlider.Minimum, SensitivitySlider.Maximum) = DuckingSettings.GetNumericRange(SettingKey.SensitivityDecibels);
+        var thresholdRange = DuckingSettings.GetNumericRange(SettingKey.ThresholdDecibels);
+        (ThresholdSlider.Minimum, ThresholdSlider.Maximum) = thresholdRange;
+        MicrophoneMeterMinimumText.Text = $"{thresholdRange.Minimum:0}";
+        MicrophoneMeterMaximumText.Text = $"{thresholdRange.Maximum:0} dBFS";
+
+        foreach (var control in new[] { HysteresisBox, ReductionBox, FadeDownBox, RestoreDelayBox, FadeUpBox })
+        {
+            (control.Minimum, control.Maximum) = DuckingSettings.GetNumericRange(SettingFor(control));
+        }
+    }
+
     /// <summary>Renders validated model settings while preserving unfinished edits and selection.</summary>
     private void RenderSettings(ApplicationState state)
     {
@@ -39,14 +53,15 @@ public sealed partial class MainWindow
         ThresholdBeforeColumn.Width = new GridLength(state.ThresholdMeterFraction, GridUnitType.Star);
         ThresholdAfterColumn.Width = new GridLength(1 - state.ThresholdMeterFraction, GridUnitType.Star);
 
+        var choices = state.Microphones;
         var existingChoices = MicrophoneComboBox.ItemsSource as IEnumerable<MicrophoneChoice>;
 
-        if (existingChoices is null || !existingChoices.SequenceEqual(state.Microphones))
+        if (existingChoices is null || !existingChoices.SequenceEqual(choices))
         {
-            MicrophoneComboBox.ItemsSource = state.Microphones;
+            MicrophoneComboBox.ItemsSource = choices;
         }
 
-        var selected = state.Microphones.FirstOrDefault(choice => choice.Id == settings.MicrophoneDeviceId);
+        var selected = choices.FirstOrDefault(choice => choice.Id == settings.MicrophoneDeviceId);
 
         if (!Equals(MicrophoneComboBox.SelectedItem, selected))
         {
@@ -110,11 +125,11 @@ public sealed partial class MainWindow
     /// <summary>Maps a named numeric control to its typed application-model command key.</summary>
     private static SettingKey SettingFor(NumberBox control) => control.Name switch
     {
-        "HysteresisBox" => SettingKey.HysteresisDecibels,
-        "ReductionBox" => SettingKey.ReductionPercent,
-        "FadeDownBox" => SettingKey.FadeDownMilliseconds,
-        "RestoreDelayBox" => SettingKey.RestoreDelayMilliseconds,
-        "FadeUpBox" => SettingKey.FadeUpMilliseconds,
+        nameof(HysteresisBox) => SettingKey.HysteresisDecibels,
+        nameof(ReductionBox) => SettingKey.ReductionPercent,
+        nameof(FadeDownBox) => SettingKey.FadeDownMilliseconds,
+        nameof(RestoreDelayBox) => SettingKey.RestoreDelayMilliseconds,
+        nameof(FadeUpBox) => SettingKey.FadeUpMilliseconds,
         _ => throw new InvalidOperationException("An unknown setting control was used.")
     };
 
