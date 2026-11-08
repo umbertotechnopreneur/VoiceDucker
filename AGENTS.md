@@ -63,9 +63,10 @@ network calls or startup registration without a request.
   footer, About disclosure, repository/site/manifesto links and centered Terms
   and Privacy links. The shared legal pages cover applications that reference
   them; retain app-specific data handling in this repository's documentation.
-- Keep main-window footer links visible for 30 seconds, then fade them out over
-  3 seconds without shifting layout. Restore them on footer hover or keyboard
-  focus and keep them visible during interaction. About links remain available.
+- Scroll the entire main workspace, including the footer, in one area without
+  a visible vertical scrollbar. Keep the footer at the bottom when content fits.
+  Right-align the VibeWare text and Manifesto link.
+  Keep About, Terms and Privacy centered on the bottom row; do not hide or fade them.
 - When the owner requests an installer, build the updated MSIX and announce the
   planned app stop/restart before executing it. Forced termination is authorized
   for this deployment workflow without another confirmation. Install the package
@@ -77,4 +78,4 @@ network calls or startup registration without a request.
 
 ## Shared publication interface
 
-Follow VibeWare templates/APP-PUBLICATION.md: centered About app · Terms · Privacy, first-person About disclosure, application and VibeWare GitHub links, personal site, and one-line This is VibeWare · Manifesto. Use the generic website legal pages with app-specific data documentation. Show main footer links for 30 seconds, fade over 3 seconds, preserve layout and reveal on hover or keyboard focus. Keep About links available.
+Follow VibeWare templates/APP-PUBLICATION.md: centered About app · Terms · Privacy, first-person About disclosure, application and VibeWare GitHub links, personal site, and This is VibeWare · Manifesto. Use the generic website legal pages with app-specific data documentation. Scroll the whole main workspace including the footer without a visible vertical scrollbar; keep the footer at the bottom when content fits. Do not hide or fade footer links. Right-align the VibeWare text and Manifesto link. Keep About links available.

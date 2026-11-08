@@ -43,6 +43,7 @@ internal sealed class TrayIconService : IDisposable
     private const uint LoadFromFile = 0x0010;
     private const uint ImageIcon = 1;
     private const uint MenuString = 0;
+    private const uint MenuGrayed = 0x0001;
     private const uint MenuReturnCommand = 0x0100;
     private const uint MenuNoNotify = 0x0080;
     private const uint MenuRightButton = 0x0002;
@@ -53,7 +54,7 @@ internal sealed class TrayIconService : IDisposable
     private static readonly SubclassProcDelegate SubclassProcedure = WindowSubclassProcedure;
 
     private readonly IntPtr _windowHandle;
-    private readonly Func<bool> _isDuckingEnabled;
+    private readonly Func<(string Label, bool Enabled)> _monitoringCommand;
     private readonly IntPtr _iconHandle;
     private readonly uint _taskbarCreatedMessage;
     private GCHandle _selfHandle;
@@ -77,7 +78,7 @@ internal sealed class TrayIconService : IDisposable
     /// <summary>
     /// Loads the icon and installs native window callbacks, releasing partial initialization on failure.
     /// </summary>
-    public TrayIconService(IntPtr windowHandle, string iconPath, Func<bool> isDuckingEnabled)
+    public TrayIconService(IntPtr windowHandle, string iconPath, Func<(string Label, bool Enabled)> monitoringCommand)
     {
         if (windowHandle == IntPtr.Zero)
         {
@@ -89,7 +90,7 @@ internal sealed class TrayIconService : IDisposable
         }
 
         _windowHandle = windowHandle;
-        _isDuckingEnabled = isDuckingEnabled;
+        _monitoringCommand = monitoringCommand;
         _taskbarCreatedMessage = RegisterWindowMessage("TaskbarCreated");
         if (_taskbarCreatedMessage == 0)
         {
@@ -258,9 +259,9 @@ internal sealed class TrayIconService : IDisposable
         try
         {
             var windowLabel = IsWindowVisible(_windowHandle) ? "Minimize to tray" : "Show window";
-            var toggleLabel = _isDuckingEnabled() ? "Disable microphone ducking" : "Enable microphone ducking";
+            var monitoring = _monitoringCommand();
             AddMenuItem(menu, 1, windowLabel);
-            AddMenuItem(menu, 2, toggleLabel);
+            AddMenuItem(menu, 2, monitoring.Label, monitoring.Enabled);
             AddMenuItem(menu, 3, "About VoiceDucker");
             AddMenuItem(menu, 4, "VoiceDucker on GitHub");
             AddMenuItem(menu, 5, "VibeWare on GitHub");
@@ -313,9 +314,10 @@ internal sealed class TrayIconService : IDisposable
     /// <summary>
     /// Appends one native menu command and reports failures before the menu is displayed.
     /// </summary>
-    private static void AddMenuItem(IntPtr menu, uint id, string label)
+    private static void AddMenuItem(IntPtr menu, uint id, string label, bool enabled = true)
     {
-        if (!AppendMenu(menu, MenuString, new UIntPtr(id), label))
+        var flags = MenuString | (enabled ? 0u : MenuGrayed);
+        if (!AppendMenu(menu, flags, new UIntPtr(id), label))
         {
             throw new Win32Exception(Marshal.GetLastWin32Error(), "The tray menu could not be populated.");
         }

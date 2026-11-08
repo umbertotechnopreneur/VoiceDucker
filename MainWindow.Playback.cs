@@ -2,13 +2,11 @@
 
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using VoiceDucker.Controls;
 using VoiceDucker.Model;
 using Windows.Storage.Streams;
-using Windows.System;
 using Windows.UI;
 
 namespace VoiceDucker;
@@ -46,11 +44,9 @@ public sealed partial class MainWindow
             row.Slider.IsEnabled = stream.CanEdit;
             row.Percentage.Text = stream.VolumeText;
             ToolTipService.SetToolTip(row.Slider, stream.VolumeHelp);
+            ToolTipService.SetToolTip(row.Percentage, stream.VolumeHelp);
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetHelpText(row.Slider, stream.VolumeHelp);
-            if (!row.Interacting)
-            {
-                row.Slider.Value = stream.SliderPercent;
-            }
+            row.Slider.ApplyModelValue(stream.SliderPercent);
         }
 
         NoStreamsText.Visibility = streams.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -203,34 +199,6 @@ public sealed partial class MainWindow
         var panel = new StackPanel { Spacing = 6 };
         panel.Children.Add(title);
         panel.Children.Add(volumeTrack);
-        var row = new StreamRow(panel, slider, meter, percentage, icon);
-
-        // Slider/Thumb can handle these routed events before they reach this row.
-        // Observe handled events too, so a completed drag cannot freeze mixer updates.
-        slider.AddHandler(UIElement.PointerPressedEvent,
-            new PointerEventHandler((_, _) => row.PointerInteracting = true), true);
-        slider.AddHandler(UIElement.PointerReleasedEvent,
-            new PointerEventHandler((_, _) => row.PointerInteracting = false), true);
-        slider.AddHandler(UIElement.PointerCanceledEvent,
-            new PointerEventHandler((_, _) => row.PointerInteracting = false), true);
-        slider.AddHandler(UIElement.PointerCaptureLostEvent,
-            new PointerEventHandler((_, _) => row.PointerInteracting = false), true);
-        // Focus can remain on the slider indefinitely; only active editing pauses refresh.
-        slider.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler((_, args) =>
-        {
-            if (IsVolumeSliderKey(args.Key))
-            {
-                row.KeyboardInteracting = true;
-            }
-        }), true);
-        slider.AddHandler(UIElement.KeyUpEvent, new KeyEventHandler((_, args) =>
-        {
-            if (IsVolumeSliderKey(args.Key))
-            {
-                row.KeyboardInteracting = false;
-            }
-        }), true);
-        slider.LostFocus += (_, _) => row.KeyboardInteracting = false;
         slider.ValueChanged += async (_, args) =>
         {
             if (_rendering)
@@ -248,7 +216,7 @@ public sealed partial class MainWindow
             }
         };
 
-        return row;
+        return new StreamRow(panel, slider, meter, percentage, icon);
     }
 
     /// <summary>
@@ -344,16 +312,9 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Identifies keys that actively edit a playback slider rather than merely focus it.
+    /// Retains a row's controls between model snapshots.
     /// </summary>
-    private static bool IsVolumeSliderKey(VirtualKey key) => key is
-        VirtualKey.Left or VirtualKey.Right or VirtualKey.Up or VirtualKey.Down or
-        VirtualKey.Home or VirtualKey.End or VirtualKey.PageUp or VirtualKey.PageDown;
-
-    /// <summary>
-    /// Retains a row's controls and transient input state between model snapshots.
-    /// </summary>
-    private sealed class StreamRow(StackPanel card, Slider slider, ProgressBar meter,
+    private sealed class StreamRow(StackPanel card, ScrollSafeSlider slider, ProgressBar meter,
         TextBlock percentage, Image icon)
     {
         #region Public methods and events
@@ -362,7 +323,7 @@ public sealed partial class MainWindow
         public StackPanel Card { get; } = card;
 
         /// <summary>Gets the slider that displays and edits the actual playback volume.</summary>
-        public Slider Slider { get; } = slider;
+        public ScrollSafeSlider Slider { get; } = slider;
 
         /// <summary>Gets the separate session signal meter.</summary>
         public ProgressBar Meter { get; } = meter;
@@ -372,15 +333,6 @@ public sealed partial class MainWindow
 
         /// <summary>Gets the process icon target for asynchronous loading.</summary>
         public Image Icon { get; } = icon;
-
-        /// <summary>Gets or sets whether a pointer gesture is editing the slider.</summary>
-        public bool PointerInteracting { get; set; }
-
-        /// <summary>Gets or sets whether an editing key is currently held.</summary>
-        public bool KeyboardInteracting { get; set; }
-
-        /// <summary>Gets whether model updates must temporarily preserve the user's slider value.</summary>
-        public bool Interacting => PointerInteracting || KeyboardInteracting;
 
         #endregion
     }

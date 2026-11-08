@@ -11,6 +11,7 @@ internal sealed record EngineStatus(
     bool Running,
     bool Speaking,
     int AffectedSessions,
+    int ReductionPercent,
     GateState Detection,
     string MicrophoneName,
     IReadOnlyList<PlaybackStream> Streams,
@@ -22,7 +23,7 @@ internal sealed record EngineStatus(
 
     /// <summary>Creates an uninitialized snapshot with capture and detection off.</summary>
     public static EngineStatus Initial(DuckingSettings settings) =>
-        new(false, false, false, 0, GateState.Off(settings), string.Empty, [], []);
+        new(false, false, false, 0, settings.ReductionPercent, GateState.Off(settings), string.Empty, [], []);
 
     #endregion
 }

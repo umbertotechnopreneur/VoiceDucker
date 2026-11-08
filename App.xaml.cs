@@ -25,6 +25,7 @@ public partial class App : Application
 
     private SingleInstanceService? _singleInstance;
     private MainWindow? _window;
+    private MemoryGuard? _memoryGuard;
 
     #endregion
 
@@ -88,6 +89,8 @@ public partial class App : Application
         _window = new MainWindow();
         _window.Closed += (_, _) =>
         {
+            _memoryGuard?.Dispose();
+            _memoryGuard = null;
             _window = null;
             try
             {
@@ -103,7 +106,29 @@ public partial class App : Application
         var dispatcher = _window.DispatcherQueue;
         _singleInstance.Listen(() =>
             dispatcher.TryEnqueue(() => _window?.ShowForRepeatedLaunch()));
+        var primaryWindow = _window;
+        _memoryGuard = new MemoryGuard(primaryWindow.StopAudioForMemoryRecovery);
+        // MainWindow's earlier handler decides between tray mode and an actual exit.
+        // Cancel the guard before the close handlers begin potentially slow audio cleanup.
+        _window.AppWindow.Closing += (_, closing) =>
+        {
+            if (!closing.Cancel) _memoryGuard?.Dispose();
+        };
         _window.Activate();
+    }
+
+    /// <summary>Reads the package version, or the assembly version for portable builds.</summary>
+    internal static string ReadDisplayVersion()
+    {
+        try
+        {
+            var version = Windows.ApplicationModel.Package.Current.Id.Version;
+            return $"{version.Major}.{version.Minor}.{version.Build}.{version.Revision}";
+        }
+        catch (InvalidOperationException)
+        {
+            return typeof(App).Assembly.GetName().Version?.ToString(3) ?? "unknown";
+        }
     }
 
     /// <summary>

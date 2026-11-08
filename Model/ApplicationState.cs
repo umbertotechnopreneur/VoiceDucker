@@ -5,18 +5,6 @@ using VoiceDucker.Licensing;
 
 namespace VoiceDucker.Model;
 
-/// <summary>Identifies the numeric audio preference edited by a typed model command.</summary>
-internal enum SettingKey
-{
-    ReductionPercent,
-    FadeDownMilliseconds,
-    FadeUpMilliseconds,
-    RestoreDelayMilliseconds,
-    HysteresisDecibels,
-    SensitivityDecibels,
-    ThresholdDecibels
-}
-
 /// <summary>Keeps a playback row's actual volume, normal reference, and output meter together.</summary>
 internal sealed record PlaybackRowState(string Key, string Name, int ProcessId, bool IsSpotify,
     double NormalPercent, double ActualPercent, double SignalPercent, bool Muted,
@@ -39,6 +27,9 @@ internal sealed record ApplicationState(DuckingSettings Settings, EngineStatus A
     bool WindowsStartupEnabled, bool WindowsStartupBusy, LicenseViewState License, string Feedback,
     bool MonitoringReminderPending = false, bool TrialExpiredNoticePending = false)
 {
+    private static readonly (double Minimum, double Maximum) MeterRange =
+        DuckingSettings.GetNumericRange(SettingKey.ThresholdDecibels);
+
     #region Public methods
 
     public long? PauseDeadlineTick { get; init; }
@@ -49,18 +40,34 @@ internal sealed record ApplicationState(DuckingSettings Settings, EngineStatus A
     public bool CanResume => !Busy && IsPaused && License.CanUse;
     public bool CanManageProfile => !Busy && Settings.Profiles.Any(profile => profile.Id == Settings.SelectedProfileId);
     public string MonitoringButtonText => IsPaused ? "Disable (cancel pause)" : Audio.Running ? "Disable" : "Enable";
+    public string TrayMonitoringText => IsPaused ? MonitoringButtonText
+        : Audio.Running ? "Disable microphone ducking" : "Enable microphone ducking";
     public ListeningProfile? SelectedProfile => Settings.Profiles.FirstOrDefault(profile => profile.Id == Settings.SelectedProfileId)
         ?? ListeningPresets.Find(Settings.SelectedProfileId);
     public IReadOnlyList<ProfileChoice> ProfileChoices => new[] { new ProfileChoice(string.Empty, "Custom settings") }
         .Concat(ListeningPresets.All.Select(profile => new ProfileChoice(profile.Id,
             profile.Name + (profile.Id == ListeningPresets.DefaultId ? " · default preset" : " · preset"))))
         .Concat(Settings.Profiles.Select(profile => new ProfileChoice(profile.Id, profile.Name))).ToArray();
-    public string ProfileHint => SelectedProfile is { } profile
-        ? ListeningPresets.Find(profile.Id) is not null
-            ? profile.Preferences.Matches(Settings) ? "Preset applied · use Save as new to customize."
-                : "Modified preset · use Save as new to keep these changes."
-            : profile.Preferences.Matches(Settings) ? "Saved profile applied." : "Modified · choose Update saved to keep these changes."
-        : "Current settings · save a profile in Settings.";
+    public string ProfileHint
+    {
+        get
+        {
+            if (SelectedProfile is not { } profile)
+            {
+                return "Current settings · save a profile in Settings.";
+            }
+
+            var matches = profile.Preferences.Matches(Settings);
+            if (ListeningPresets.Find(profile.Id) is not null)
+            {
+                return matches ? "Preset applied · use Save as new to customize."
+                    : "Modified preset · use Save as new to keep these changes.";
+            }
+
+            return matches ? "Saved profile applied."
+                : "Modified · choose Update saved to keep these changes.";
+        }
+    }
 
     /// <summary>Allows monitoring changes when no competing model operation is pending.</summary>
     public bool CanToggle => !Busy && (IsPaused || Audio.Running || License.CanUse);
@@ -149,7 +156,7 @@ internal sealed record ApplicationState(DuckingSettings Settings, EngineStatus A
 
             if (Audio.AffectedSessions > 0)
             {
-                return $"Lowering {Audio.AffectedSessions} playing session(s) by {Settings.ReductionPercent}%.";
+                return $"Lowering {Audio.AffectedSessions} playing session(s) by {Audio.ReductionPercent}%.";
             }
 
             if (Audio.Speaking)
@@ -205,7 +212,7 @@ internal sealed record ApplicationState(DuckingSettings Settings, EngineStatus A
     public double MicrophoneMeterFraction => Audio.Running ? SignalPercent(Audio.Detection.Rms) / 100 : 0;
 
     /// <summary>Positions the configured threshold on the same 60 dB display range.</summary>
-    public double ThresholdMeterFraction => Math.Clamp((Settings.ThresholdDecibels + 60) / 60, 0, 1);
+    public double ThresholdMeterFraction => MeterFraction(Settings.ThresholdDecibels);
 
     /// <summary>Scales the microphone animation independently of the calibrated level meter.</summary>
     public double AnimationLevel => Audio.Running ? Math.Clamp(Audio.Detection.Rms / 0.08, 0, 1) : 0;
@@ -217,21 +224,27 @@ internal sealed record ApplicationState(DuckingSettings Settings, EngineStatus A
     /// <summary>Derives a row's volume limits, meter, and help from one immutable playback observation.</summary>
     private PlaybackRowState ToPlaybackRow(PlaybackStream stream)
     {
-        var lowering = Audio.Running && Audio.Speaking && stream.IsEligible;
-        var maximum = lowering ? 100 - Settings.ReductionPercent : 100;
-        var help = maximum == 0
-            ? "Volume is held at zero while reduction is 100%. Lower Reduce volume by to adjust playback."
-            : lowering
-                ? $"Current playback volume. Maximum {maximum}% while lowering. Adjusting it also updates the normal level used when sound detection ends."
-                : "Current playback volume. Adjusting it sets the normal level used when sound detection ends.";
+        var lowering = Audio.Running && Audio.Speaking && stream.IsEligible && Audio.ReductionPercent > 0;
+        var maximum = lowering ? 100 - Audio.ReductionPercent : 100;
+        var help = stream switch
+        {
+            { Muted: true } => "This session is muted. Unmute it in the playing app or Windows mixer to adjust playback.",
+            { HasAudibleSignal: false } => "No playback signal detected for this session. Its meter stays empty and no new automatic reduction is applied. Resume playback in this app to adjust or automatically lower it.",
+            _ when maximum == 0 => "Volume is held at zero while reduction is 100%. Lower Reduce volume by to adjust playback.",
+            _ when lowering => $"Current playback volume. Maximum {maximum}% while lowering. Adjusting it also updates the normal level used when sound detection ends.",
+            _ => "Current playback volume. Adjusting it sets the normal level used when sound detection ends."
+        };
+        if (!stream.IsEligible)
+            help += " Automatic lowering is off for this app. Turn on Also lower other apps in Apps & startup to include it.";
 
         var normalPercent = stream.NormalVolume * 100;
         var actualPercent = stream.ActualVolume * 100;
         var outputAmplitude = stream.Muted ? 0 : stream.Peak * stream.ActualVolume;
-        var canEdit = !stream.Muted && Audio.Ready && maximum > 0;
+        var canEdit = !stream.Muted && stream.HasAudibleSignal && Audio.Ready && maximum > 0;
         var volumeText = stream.Muted
             ? "MUTED"
-            : $"Volume {stream.ActualVolume * 100:0}% · Normal {stream.NormalVolume * 100:0}%";
+            : $"Volume {actualPercent:0}% · Normal {normalPercent:0}%" +
+                (stream.HasAudibleSignal ? string.Empty : " · No signal");
 
         return new PlaybackRowState(
             stream.Key,
@@ -255,11 +268,11 @@ internal sealed record ApplicationState(DuckingSettings Settings, EngineStatus A
             return 0;
         }
 
-        var decibels = 20 * Math.Log10(amplitude);
-        var meterPercent = (decibels + 60) / 60 * 100;
-
-        return Math.Clamp(meterPercent, 0, 100);
+        return MeterFraction(20 * Math.Log10(amplitude)) * 100;
     }
+
+    private static double MeterFraction(double decibels) =>
+        Math.Clamp((decibels - MeterRange.Minimum) / (MeterRange.Maximum - MeterRange.Minimum), 0, 1);
 
     #endregion
 }

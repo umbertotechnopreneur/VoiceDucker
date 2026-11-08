@@ -2,12 +2,28 @@
 
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using VoiceDucker.Audio;
 using VoiceDucker.Model;
 
 namespace VoiceDucker;
 
 public sealed partial class MainWindow
 {
+    private void ConfigureListeningControls()
+    {
+        ProfileNameBox.MaxLength = ListeningProfile.MaxNameLength;
+
+        var pauseMenu = new MenuFlyout();
+        foreach (var minutes in VoiceDuckerModel.PauseDurations)
+        {
+            var item = new MenuFlyoutItem { Text = $"Pause for {minutes} minutes" };
+            item.Click += async (_, _) => await _model.PauseAsync(minutes);
+            pauseMenu.Items.Add(item);
+        }
+
+        PauseButton.Flyout = pauseMenu;
+    }
+
     /// <summary>Renders model-owned profiles and pause state. Only unfinished text stays in the view.</summary>
     private void RenderListeningControls(ApplicationState state)
     {
@@ -52,8 +68,5 @@ public sealed partial class MainWindow
         if (!_rendering) _model.SetSmoothTransitions(SmoothTransitionsCheckBox.IsChecked == true);
     }
 
-    private async void Pause5_Click(object sender, RoutedEventArgs args) => await _model.PauseAsync(5);
-    private async void Pause15_Click(object sender, RoutedEventArgs args) => await _model.PauseAsync(15);
-    private async void Pause30_Click(object sender, RoutedEventArgs args) => await _model.PauseAsync(30);
     private async void Resume_Click(object sender, RoutedEventArgs args) => await _model.ResumePauseAsync();
 }

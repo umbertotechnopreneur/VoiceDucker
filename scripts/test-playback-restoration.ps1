@@ -42,7 +42,8 @@ namespace VoiceDucker.Audio {
  internal sealed class FakeMixer(params FakeSession[] sessions):IPlaybackSource {
  public List<FakeSession> Sessions{get;}=[..sessions];
  public bool FailRead{get;set;}
- public PlaybackReadResult Read()=>FailRead?throw new InvalidOperationException("Synthetic read failure"):new(Sessions.Where(s=>s.Present).Select(s=>new PlaybackObservation(s.Key,"Spotify",101,s.Volume,s.Peak,s.Muted,s.Active)).ToArray(),[]);
+ public IReadOnlyDictionary<string,bool>? SessionExpiry{get;set;}
+ public PlaybackReadResult Read()=>FailRead?throw new InvalidOperationException("Synthetic read failure"):new(Sessions.Where(s=>s.Present).Select(s=>new PlaybackObservation(s.Key,"Spotify",101,s.Volume,s.Peak,s.Muted,s.Active)).ToArray(),[],SessionExpiry:SessionExpiry);
  public float ReadVolume(string key)=>Sessions.Single(s=>s.Key==key).Volume;
  public float SetVolume(string key,float value) {
  var s=Sessions.Single(s=>s.Key==key); if(s.FailWrites)throw new InvalidOperationException("Synthetic write failure");
@@ -150,6 +151,38 @@ playback.SetNormalVolume("music",1); Tick(true,true,s:settings with {FadeDownMil
 music.Present=false; playback.RequestStartupRestoration(); Tick(false,false);
 Check(playback.HasPendingRestoration && playback.RestorationError is not null,"Absent owned session falsely restored.");
 music.Present=true; Tick(false,false); Near(music.Volume,1,"Reappearing session startup ownership");
+
+// Confirmed expiry removes a restoration blocker while preserving its baseline if the same instance returns.
+var expired = new FakeSession("expired", .8f);
+var unavailable = new FakeSession("unavailable", .9f);
+using var lifecycleSource = new FakeMixer(expired, unavailable);
+using var lifecycle = new PlaybackSessions(lifecycleSource, new PlaybackVolumeEvents(), () => now);
+var lifecycleSettings = settings with { FadeDownMilliseconds = 0 };
+Check(lifecycle.Update(true, true, lifecycleSettings), "Session lifecycle discovery failed.");
+Near(expired.Volume, .4f, "Expired session reduction before pause");
+Near(unavailable.Volume, .45f, "Unavailable session reduction before pause");
+var expiredWrites = expired.Writes;
+
+expired.Present = unavailable.Present = false;
+lifecycleSource.SessionExpiry = new Dictionary<string, bool> { [expired.Key] = true };
+lifecycle.RequestStartupRestoration();
+lifecycle.Update(false, false, lifecycleSettings);
+Check(lifecycle.HasPendingRestoration, "An inaccessible owned session stopped blocking restoration.");
+
+unavailable.Present = true;
+lifecycleSource.SessionExpiry = null;
+lifecycle.Update(false, false, lifecycleSettings);
+Near(unavailable.Volume, .9f, "Temporarily unavailable session restored its startup baseline");
+Check(!lifecycle.HasPendingRestoration && lifecycle.RestorationError is null && expired.Writes == expiredWrites,
+    "The confirmed expired session blocked restoration or received a mixer write.");
+
+lifecycleSource.SessionExpiry = new Dictionary<string, bool> { [expired.Key] = false };
+lifecycle.Update(false, false, lifecycleSettings);
+Check(lifecycle.HasPendingRestoration, "Reactivation did not renew the blocker while volume was unavailable.");
+expired.Present = true;
+lifecycle.Update(false, false, lifecycleSettings);
+Near(expired.Volume, .8f, "Reactivated session restored its original startup baseline");
+Check(!lifecycle.HasPendingRestoration, "Successful reactivation restoration remained pending.");
 
 var late=new FakeSession("late",.8f);
 var silent=new FakeSession("silent",.7f){Peak=0};
